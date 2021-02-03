@@ -18,7 +18,7 @@ if __name__ == "__main__":
     screwed_transform = transforms.Compose([transforms.GaussianBlur(kernel_size=(3, 3), sigma=2),
                                             transforms.Resize((32, 32)),
                                             transforms.Resize((64, 64), interpolation=0)])
-    ds = DIV2KDataset(hr_folder="DIV2K_HR/", lr_folder="DIV2K_LR_bicubic/X2", dcrop=(64, 64),
+    ds = DIV2KDataset(hr_folder="DIV2K_HR/", dcrop=(64, 64),
                       lr_transform=screwed_transform,
                       aug_transform=tfs, normalize=True)
     train_set, valid_set = torch.utils.data.random_split(ds, [800, 100])

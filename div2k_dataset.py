@@ -13,14 +13,12 @@ from typing import Tuple
 class DIV2KDataset(Dataset):
     def __init__(self,
                  hr_folder: str,
-                 lr_folder: str,
                  dcrop: Tuple[int, int],
                  lr_transform,
                  aug_transform=None,
                  normalize=False):
         self.size = len(os.listdir(hr_folder))
         self.hr_folder = hr_folder
-        self.lr_folder = lr_folder
         self.aug_transform = aug_transform
         self.lr_transform = lr_transform
         self.dcrop = dcrop
