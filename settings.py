@@ -6,3 +6,4 @@ TRAIN_NAME = "SR_Train"
 VALID_NAME = "SR_Valid"
 IMG_NAME = "SR_img"
 NUM_IMAGES = 5
+PATH = "results/"

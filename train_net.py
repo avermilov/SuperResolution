@@ -22,15 +22,20 @@ def train_net(net: nn.Module,
               valid_criterion: nn.Module,
               optimizer: optim.Optimizer,
               train_loader: DataLoader,
-              validation_loader: DataLoader):
+              validation_loader: DataLoader,
+              scheduler=None):
     net.train()
     sw = SummaryWriter()
 
     running_loss = 0
     total = 0
 
+    minibatch_no = 0
     for epoch in range(epochs):
-        minibatch_no = 0
+        if scheduler is not None:
+            for g in optimizer.param_groups:
+                g["lr"] = scheduler[epoch]
+
         for i, (lr_img, hr_img) in tqdm(enumerate(train_loader)):
             lr_img, hr_img = lr_img.to(DEVICE), hr_img.to(DEVICE)
             total += lr_img.shape[0]
@@ -49,5 +54,6 @@ def train_net(net: nn.Module,
         with torch.no_grad():
             acc = validate(net, epoch, valid_criterion, validation_loader, sw)
             sw.add_scalar(VALID_NAME, acc, epoch)
+            torch.save(net.state_dict(), PATH + f"epoch_{epoch:02}_acc_{acc:.3}.pth")
 
     sw.close()
