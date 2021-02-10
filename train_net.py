@@ -6,15 +6,9 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from settings import *
-from utils import *
 from validate_net import validate
 from predict import predict
-
-validation_model = torchvision.models.vgg16(pretrained=True)
-validation_model.classifier = nn.Identity()
-validation_model = validation_model.to(DEVICE)
-validation_model.eval()
+from settings import *
 
 
 def train_net(net: nn.Module,
@@ -24,6 +18,9 @@ def train_net(net: nn.Module,
               optimizer: optim.Optimizer,
               train_loader: DataLoader,
               validation_loader: DataLoader,
+              predict_loader: DataLoader,
+              lr_transform: nn.Module,
+              predict_transform: nn.Module,
               scheduler=None):
     net.train()
     sw = SummaryWriter()
@@ -38,11 +35,12 @@ def train_net(net: nn.Module,
                 g["lr"] = scheduler[epoch]
 
         for i, hr_img in tqdm(enumerate(train_loader)):
-            lr_img = screwed_transform(hr_img[0])
+            lr_img = lr_transform(hr_img[0])
             hr_img, lr_img = hr_img[0].to(DEVICE), lr_img.to(DEVICE)
             total += lr_img.shape[0]
 
-            loss = train_criterion(lr_img, hr_img, net, validation_model)
+            sr_img = net(lr_img)
+            loss = train_criterion(sr_img, hr_img)
             running_loss += loss.item()
 
             loss.backward()
@@ -50,13 +48,12 @@ def train_net(net: nn.Module,
             optimizer.zero_grad()
 
             if i % EVERY_N_MINIBATCHES == EVERY_N_MINIBATCHES - 1:
-                sw.add_scalar(TRAIN_NAME, running_loss / total, minibatch_no)
+                sw.add_scalar(TRAIN_LOG_NAME, running_loss / total, minibatch_no)
                 minibatch_no += 1
 
         with torch.no_grad():
-            acc = validate(net, epoch, valid_criterion, validation_loader, sw)
-            sw.add_scalar(VALID_NAME, acc, epoch)
-            torch.save(net.state_dict(), RESULTS_PATH + f"epoch_{epoch:02}_acc_{acc:.3}.pth")
-            predict(net, epoch, sw)
+            acc = validate(net, epoch, valid_criterion, validation_loader, lr_transform, sw)
+            torch.save(net.state_dict(), CHECKPOINTS_PATH + f"epoch_{epoch:02}_acc_{acc:.3}.pth")
+            predict(net, epoch, predict_loader, predict_transform, sw)
 
     sw.close()
