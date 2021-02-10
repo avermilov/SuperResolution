@@ -9,6 +9,7 @@ from tqdm import tqdm
 from settings import *
 from utils import *
 from validate_net import validate
+from predict import predict
 
 validation_model = torchvision.models.vgg16(pretrained=True)
 validation_model.classifier = nn.Identity()
@@ -36,8 +37,9 @@ def train_net(net: nn.Module,
             for g in optimizer.param_groups:
                 g["lr"] = scheduler[epoch]
 
-        for i, (lr_img, hr_img) in tqdm(enumerate(train_loader)):
-            lr_img, hr_img = lr_img.to(DEVICE), hr_img.to(DEVICE)
+        for i, hr_img in tqdm(enumerate(train_loader)):
+            lr_img = screwed_transform(hr_img[0])
+            hr_img, lr_img = hr_img[0].to(DEVICE), lr_img.to(DEVICE)
             total += lr_img.shape[0]
 
             loss = train_criterion(lr_img, hr_img, net, validation_model)
@@ -54,6 +56,7 @@ def train_net(net: nn.Module,
         with torch.no_grad():
             acc = validate(net, epoch, valid_criterion, validation_loader, sw)
             sw.add_scalar(VALID_NAME, acc, epoch)
-            torch.save(net.state_dict(), PATH + f"epoch_{epoch:02}_acc_{acc:.3}.pth")
+            torch.save(net.state_dict(), RESULTS_PATH + f"epoch_{epoch:02}_acc_{acc:.3}.pth")
+            predict(net, epoch, sw)
 
     sw.close()

@@ -5,6 +5,8 @@ from torch import nn
 import torchvision
 import torch.nn.functional as F
 import cv2
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
 
@@ -15,13 +17,13 @@ def l1_and_vgg_loss(x: torch.tensor, y: torch.tensor, model: nn.Module, validati
     return l1 + l1_features
 
 
-def l1_loss(x: torch.tensor, y: torch.tensor, model: nn.Module, validation_model: nn.Module) -> float:
+def l1_loss(x: torch.tensor, y: torch.tensor, model: nn.Module) -> float:
     y_pred = model(x)
     l1 = nn.L1Loss()(y_pred, y)
     return l1
 
 
-def PSNR(x, y, model):
+def PSNR(x, y, model) -> torch.tensor:
     y_pred = model(x)
     mse = nn.MSELoss()(y_pred, y)
     return 10 * torch.log10(1 / mse)
@@ -45,6 +47,9 @@ def create_grid(lr_img: torch.tensor, result: torch.tensor, hr_img: torch.tensor
         lr = lr_img / 2 + 0.5
         hr = hr_img / 2 + 0.5
         res = result / 2 + 0.5
+    lr = torch.clamp(lr, 0, 1)
+    hr = torch.clamp(hr, 0, 1)
+    res = torch.clamp(res, 0, 1)
     zeros = torch.zeros(3, lr_img.shape[1], lr_img.shape[1])
     fit = torch.cat((zeros, zeros), dim=1)
     fit2 = torch.cat((zeros, lr), dim=1)
@@ -52,15 +57,6 @@ def create_grid(lr_img: torch.tensor, result: torch.tensor, hr_img: torch.tensor
     lr = torch.cat((fit, fit2), dim=2)
     ts = torch.cat((lr, res, hr), dim=2)
     return torchvision.utils.make_grid(ts)
-
-
-def get_imgs(ind: int) -> (torch.tensor, torch.tensor):
-    lr = torch.from_numpy(io.imread(f"DIV2K_LR_bicubic/X2/{ind:04}x2.png")).permute(2, 0, 1).type(torch.FloatTensor)
-    lr = transforms.Normalize((128, 128, 128), (128, 128, 128))(lr)
-
-    hr = torch.from_numpy(io.imread(f"DIV2K_HR/{ind:04}.png")).permute(2, 0, 1).type(torch.FloatTensor)
-    hr = transforms.Normalize((128, 128, 128), (128, 128, 128))(hr)
-    return lr, hr
 
 
 class AverageMeter(object):
