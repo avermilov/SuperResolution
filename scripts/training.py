@@ -22,7 +22,8 @@ def train(net: nn.Module,
           scheduler: List[float] = None,
           warmup: List[float] = None,
           summary_writer: SummaryWriter = None,
-          max_images=0):
+          max_images=0,
+          every_n: int = 1):
     net.train()
 
     running_loss = 0
@@ -65,7 +66,7 @@ def train(net: nn.Module,
                 summary_writer.add_scalar(LEARNING_RATE_NAME, learning_rate,
                                           global_step=i + epoch * len(train_loader))
 
-                if (i + 1) % EVERY_N_MINIBATCHES == 0:
+                if (i + 1) % every_n == 0:
                     summary_writer.add_scalar(TRAIN_NAME, running_loss / total_images, global_step=minibatch_number)
                     minibatch_number += 1
 
@@ -84,6 +85,7 @@ def train_gan(generator: nn.Module,
               gen_optimizer: optim.Optimizer,
               dis_optimizer: optim.Optimizer,
               gan_loss_coeff: float,
+              start_epoch: int,
               epochs: int,
               validation_metric,
               train_loader: DataLoader,
@@ -93,12 +95,13 @@ def train_gan(generator: nn.Module,
               scheduler: List[float] = None,
               warmup: List[float] = None,
               summary_writer: SummaryWriter = None,
-              max_images=0):
+              max_images=0,
+              every_n: int = 1):
     running_loss = 0
     total_images = 0
     minibatch_number = 0
 
-    for epoch in range(epochs):
+    for epoch in range(start_epoch, epochs):
         # If scheduler was passed, change lr to the one specified at each epoch.
         if scheduler:
             for g in gen_optimizer.param_groups:
@@ -154,7 +157,7 @@ def train_gan(generator: nn.Module,
                 summary_writer.add_scalar(LEARNING_RATE_NAME, learning_rate,
                                           global_step=i + epoch * len(train_loader))
 
-                if (i + 1) % EVERY_N_MINIBATCHES == 0:
+                if (i + 1) % every_n == 0:
                     summary_writer.add_scalar(TRAIN_NAME, running_loss / total_images, global_step=minibatch_number)
                     minibatch_number += 1
 
@@ -163,7 +166,8 @@ def train_gan(generator: nn.Module,
             acc = validate(generator, validation_metric, validation_loader,
                            validation_transform, epoch, summary_writer, max_images)
             checkpoint_dict = {
-                "epoch": epoch,
+                "epoch": epoch + 1,
+                "epochs": epochs,
                 "generator": generator.state_dict(),
                 "discriminator:": discriminator.state_dict(),
                 "gen_optimizer": gen_optimizer.state_dict(),

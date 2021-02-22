@@ -1,10 +1,24 @@
 import torch
 import torchvision
-import torch.nn as nn
-import torch.tensor as Tensor
-import numpy as np
+from torch import nn as nn
 
 from settings import DEVICE
+
+
+class LSGANDisLoss(nn.Module):
+    def __init__(self):
+        super(LSGANDisLoss, self).__init__()
+
+    def forward(self, fake: torch.tensor, real: torch.tensor) -> torch.tensor:
+        return torch.mean(fake ** 2 + (real - 1) ** 2)
+
+
+class LSGANGenLoss(nn.Module):
+    def __init__(self):
+        super(LSGANGenLoss, self).__init__()
+
+    def forward(self, fake: torch.tensor, real: torch.tensor) -> torch.tensor:
+        return torch.mean((fake - 1) ** 2)
 
 
 class VGGPerceptual(nn.Module):
@@ -26,38 +40,7 @@ class VGGPerceptual(nn.Module):
         # Create L1 loss for measuring distance
         self.loss = nn.L1Loss()
 
-    def forward(self, input: Tensor, target: Tensor) -> Tensor:
+    def forward(self, input: torch.tensor, target: torch.tensor) -> torch.tensor:
         l1 = self.loss(input, target)
         l1_features = self.loss(self.validation_model(input), self.validation_model(target))
         return self.l1_coeff * l1 + self.vgg_coeff * l1_features
-
-
-class LSGANGenLoss(nn.Module):
-    def __init__(self):
-        super(LSGANGenLoss, self).__init__()
-
-    def forward(self, fake: Tensor, real: Tensor) -> Tensor:
-        return torch.mean((fake - 1) ** 2)
-
-
-class LSGANDisLoss(nn.Module):
-    def __init__(self):
-        super(LSGANDisLoss, self).__init__()
-
-    def forward(self, fake: Tensor, real: Tensor) -> Tensor:
-        return torch.mean(fake ** 2 + (real - 1) ** 2)
-
-
-class PSNR:
-    def __init__(self):
-        self.name = "PSNR"
-
-    @staticmethod
-    def __call__(sr_img: torch.tensor, hr_img: torch.tensor) -> torch.tensor:
-        with torch.no_grad():
-            mse = torch.mean((torch.clamp(sr_img, min=-1, max=1) - hr_img) ** 2)
-            return 10 * torch.log10(4.0 / mse)
-
-
-def worker_init_fn(worker_id):
-    np.random.seed(np.random.get_state()[1][0] + worker_id)
