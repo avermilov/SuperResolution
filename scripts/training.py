@@ -164,9 +164,9 @@ def train_gan(generator: nn.Module,
                            validation_transform, epoch, summary_writer, max_images)
             checkpoint_dict = {
                 "epoch": epoch,
-                "generator": generator,
-                "discriminator:": discriminator,
-                "gen_optimizer": gen_optimizer,
-                "dis_optimizer": dis_optimizer
+                "generator": generator.state_dict(),
+                "discriminator:": discriminator.state_dict(),
+                "gen_optimizer": gen_optimizer.state_dict(),
+                "dis_optimizer": dis_optimizer.state_dict()
             }
             torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"GAN_Epoch{epoch:03}_Acc{acc:.5}.pth")

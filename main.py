@@ -72,7 +72,7 @@ if __name__ == "__main__":
     validation_metric = PSNR()
     scheduler = [1e-3] * 2
 
-    # checkpoint = torch.load(CHECKPOINTS_PATH)
+    # checkpoint = torch.load(CHECKPOINTS_PATH + "GAN_Epoch001_Acc25.3.pth")
     # generator.load_state_dict(checkpoint["generator"])
     # discriminator.load_state_dict(checkpoint["discriminator"])
     # gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
