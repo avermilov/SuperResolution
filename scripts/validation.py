@@ -42,7 +42,7 @@ def validate(net: nn.Module,
                 # Transform and clamp images to [0, 1]
                 for i in range(hr_image.shape[0]):
                     if images_logged < max_images:
-                        if epoch == 0:
+                        if epoch <= 1:
                             # Log bicubic resized image once only
                             resized_image = resize_transform(lr_image[i])
                             resized_image = (resized_image + 1) / 2

@@ -41,3 +41,5 @@ parser.add_argument("--scheduler", type=float, default=None, nargs="+",
                     help="Scheduler for training session.")
 parser.add_argument("--warmup", type=float, default=None, nargs="+",
                     help="Warmup scheduler for training session.")
+parser.add_argument("--best_metric", type=float, default=-1,
+                    help="Minimum metric value required to save model.")

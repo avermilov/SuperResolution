@@ -1,4 +1,4 @@
-from torch import nn, optim, log10
+from torch import nn, optim
 from torch.utils.data import DataLoader
 from typing import List
 import torch.nn.functional as F
@@ -97,7 +97,8 @@ def train_gan(generator: nn.Module,
               warmup: List[float] = None,
               summary_writer: SummaryWriter = None,
               max_images=0,
-              every_n: int = 1):
+              every_n: int = 1,
+              best_metric: float = -1):
     minibatch_number = 0
 
     for epoch in range(start_epoch, epochs):
@@ -185,8 +186,8 @@ def train_gan(generator: nn.Module,
                                       global_step=epoch)
         # Validate model
         with torch.no_grad():
-            acc = validate(generator, validation_metric, validation_loader,
-                           validation_transform, epoch, summary_writer, max_images)
+            metric = validate(generator, validation_metric, validation_loader,
+                              validation_transform, epoch, summary_writer, max_images)
             checkpoint_dict = {
                 "epoch": epoch + 1,
                 "epochs": epochs,
@@ -199,5 +200,8 @@ def train_gan(generator: nn.Module,
                 "max_images": max_images,
                 "every_n": every_n,
                 "gan_coeff": gan_loss_coeff,
+                "best_metric": best_metric
             }
-            torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"GAN_Epoch{epoch:03}_Acc{acc:.5}.pth")
+            if metric > best_metric:
+                best_metric = metric
+                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"GAN_Epoch{epoch:03}_Acc{metric:.5}.pth")

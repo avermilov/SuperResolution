@@ -39,6 +39,7 @@ if __name__ == "__main__":
     every_n = args.every_n
     scheduler = args.scheduler
     warmup = args.warmup
+    best_metric = args.best_metric
 
     # If a JSON was passed, override any value encountered with one from file.
     if args.json:
@@ -63,6 +64,7 @@ if __name__ == "__main__":
         if "every_n" in data: every_n = data["every_n"]
         if "scheduler" in data: scheduler = data["scheduler"]
         if "warmup" in data: warmup = data["warmup"]
+        if "best_metric" in data: best_metric = data["best_metric"]
 
     # Transform for converting image from training ImageFolder to tensor.
     train_transform = transforms.Compose([
@@ -126,6 +128,7 @@ if __name__ == "__main__":
         max_images_log = checkpoint["max_images"]
         every_n = checkpoint["every_n"]
         gan_coeff = checkpoint["gan_coeff"]
+        best_metric = checkpoint["best_metric"]
 
     train_gan(generator=generator,
               discriminator=discriminator,
@@ -146,4 +149,5 @@ if __name__ == "__main__":
               warmup=warmup,
               summary_writer=sw,
               max_images=max_images_log,
-              every_n=every_n)
+              every_n=every_n,
+              best_metric=best_metric)
