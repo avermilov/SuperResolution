@@ -35,4 +35,9 @@ parser.add_argument("--max_images_log", type=int, default=10,
                     help="Maximum amount of validation images logged to tensorboard.")
 parser.add_argument("--every_n", type=int, default=10,
                     help="Periodicity with which mini batch training stats are to be logged.")
-parser.parse_args()
+parser.add_argument("--json", type=str, default=None,
+                    help="JSON file with same possible arguments as parser.")
+parser.add_argument("--scheduler", type=float, default=None, nargs="+",
+                    help="Scheduler for training session.")
+parser.add_argument("--warmup", type=float, default=None, nargs="+",
+                    help="Warmup scheduler for training session.")
