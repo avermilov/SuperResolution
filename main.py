@@ -40,6 +40,7 @@ if __name__ == "__main__":
     scheduler = args.scheduler
     warmup = args.warmup
     best_metric = args.best_metric
+    expand_on = args.expand_on
 
     # If a JSON was passed, override any value encountered with one from file.
     if args.json:
@@ -65,6 +66,7 @@ if __name__ == "__main__":
         if "scheduler" in data: scheduler = data["scheduler"]
         if "warmup" in data: warmup = data["warmup"]
         if "best_metric" in data: best_metric = data["best_metric"]
+        if "expand_on" in data: expand_on = data["expand_on"]
 
     # Transform for converting image from training ImageFolder to tensor.
     train_transform = transforms.Compose([
@@ -129,6 +131,17 @@ if __name__ == "__main__":
         every_n = checkpoint["every_n"]
         gan_coeff = checkpoint["gan_coeff"]
         best_metric = checkpoint["best_metric"]
+
+    elif expand_on:
+        checkpoint = torch.load(expand_on)
+        generator.load_state_dict(checkpoint["generator"])
+        discriminator.load_state_dict(checkpoint["discriminator"])
+        gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
+        dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
+        start_epoch = checkpoint["epoch"]
+        max_images_log = checkpoint["max_images"]
+        every_n = checkpoint["every_n"]
+        gan_coeff = checkpoint["gan_coeff"]
 
     train_gan(generator=generator,
               discriminator=discriminator,

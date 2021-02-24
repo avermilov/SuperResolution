@@ -33,6 +33,8 @@ parser.add_argument("--gan_coeff", type=float, default=0.1,
                     help="Generator criterion coefficient for total generator loss.")
 parser.add_argument("--max_images_log", type=int, default=10,
                     help="Maximum amount of validation images logged to tensorboard.")
+parser.add_argument("--expand_on", type=str, default=None,
+                    help="Use previously finished model and further train with it.")
 parser.add_argument("--every_n", type=int, default=10,
                     help="Periodicity with which mini batch training stats are to be logged.")
 parser.add_argument("--json", type=str, default=None,
