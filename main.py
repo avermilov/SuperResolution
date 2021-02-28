@@ -9,7 +9,7 @@ from scripts.losses import LSGANDisLoss, LSGANGenLoss, VGGPerceptual
 from scripts.training import train_gan
 from models import rdn
 from settings import DEVICE
-from models.conv_discriminator import ConvDiscriminator
+from models.conv_discriminator import ConvDiscriminator, ExtendedConvDiscriminator
 from scripts.metrics import PSNR, worker_init_fn
 from scripts.argparser import parser
 import json
@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     # General training parameters.
     generator = rdn.RDN(SCALE, 3, 64, 64, 16, 8).to(DEVICE)
-    discriminator = ConvDiscriminator(num_channels=6, num_features=discriminator_num_features).to(DEVICE)
+    discriminator = ExtendedConvDiscriminator(num_channels=6, num_features=discriminator_num_features).to(DEVICE)
     supervised_criterion = VGGPerceptual(l1_coeff=l1_coeff, vgg_coeff=vgg_coeff)
     gen_criterion = LSGANGenLoss()
     dis_criterion = LSGANDisLoss()
@@ -135,9 +135,9 @@ if __name__ == "__main__":
     elif expand_on:
         checkpoint = torch.load(expand_on)
         generator.load_state_dict(checkpoint["generator"])
-        discriminator.load_state_dict(checkpoint["discriminator"])
         gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
         dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
+        discriminator.load_state_dict(checkpoint["discriminator"])
         start_epoch = checkpoint["epoch"]
         max_images_log = checkpoint["max_images"]
         every_n = checkpoint["every_n"]

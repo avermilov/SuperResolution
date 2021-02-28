@@ -99,7 +99,7 @@ def train_gan(generator: nn.Module,
               max_images=0,
               every_n: int = 1,
               best_metric: float = -1):
-    minibatch_number = 0
+    minibatch_number = len(train_loader) * start_epoch // every_n
 
     for epoch in range(start_epoch, epochs):
         # If scheduler was passed, change lr to the one specified at each epoch.
@@ -176,7 +176,7 @@ def train_gan(generator: nn.Module,
                                               global_step=minibatch_number)
                     summary_writer.add_scalar(DISCRIMINATOR_LOSS_NAME, running_dis_loss / total_images,
                                               global_step=minibatch_number)
-                    summary_writer.add_scalar(SUPERVISED_LOSS_NAME, supervised_loss / total_images,
+                    summary_writer.add_scalar(SUPERVISED_LOSS_NAME, running_super_loss / total_images,
                                               global_step=minibatch_number)
                     minibatch_number += 1
 
@@ -192,7 +192,7 @@ def train_gan(generator: nn.Module,
                 "epoch": epoch + 1,
                 "epochs": epochs,
                 "generator": generator.state_dict(),
-                "discriminator:": discriminator.state_dict(),
+                "discriminator": discriminator.state_dict(),
                 "gen_optimizer": gen_optimizer.state_dict(),
                 "dis_optimizer": dis_optimizer.state_dict(),
                 "warmup": warmup,
