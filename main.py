@@ -1,3 +1,5 @@
+import argparse
+
 import torch
 import torchvision
 from PIL import Image
@@ -9,64 +11,95 @@ from scripts.losses import LSGANDisLoss, LSGANGenLoss, VGGPerceptual
 from scripts.training import train_gan
 from models import rdn
 from settings import DEVICE
-from models.conv_discriminator import ConvDiscriminator, ExtendedConvDiscriminator
+from models.conv_discriminator import ConvDiscriminator
 from scripts.metrics import PSNR, worker_init_fn
-from scripts.argparser import parser
 import json
 
 if __name__ == "__main__":
     # Upscaling parameter
     SCALE = 2
 
-    # Get all parameters from command line parser.
-    args = parser.parse_args()
-    tr_path = args.tr_path
-    val_path = args.val_path
-    epochs = args.epochs
-    generator_lr = args.generator_lr
-    discriminator_lr = args.discriminator_lr
-    train_batch_size = args.train_batch_size
-    validation_batch_size = args.validation_batch_size
-    train_crop = args.train_crop
-    validation_crop = args.validation_crop
-    resume_path = args.resume_path
-    discriminator_num_features = args.discriminator_num_features
-    num_workers = args.num_workers
-    l1_coeff = args.l1_coeff
-    vgg_coeff = args.vgg_coeff
-    gan_coeff = args.gan_coeff
-    max_images_log = args.max_images_log
-    every_n = args.every_n
-    scheduler = args.scheduler
-    warmup = args.warmup
-    best_metric = args.best_metric
-    expand_on = args.expand_on
+    # Required arguments in the JSON file.
+    REQ_ARGUMENTS = ["tr_path", "val_path", "epochs", "generator_lr", "discriminator_lr",
+                     "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
+                     "num_workers", "max_images_log", "gan_coeff", "every_n",
+                     "discriminator_type", "generator_type", "supervised_loss_type"]
 
-    # If a JSON was passed, override any value encountered with one from file.
-    if args.json:
-        with open(args.json, "r") as file:
-            data = json.load(file)
-        if "tr_path" in data: tr_path = data["tr_path"]
-        if "val_path" in data: val_path = data["val_path"]
-        if "epochs" in data: epochs = data["epochs"]
-        if "generator_lr" in data: generator_lr = data["generator_lr"]
-        if "discriminator_lr" in data: discriminator_lr = data["discriminator_lr"]
-        if "train_batch_size" in data: train_batch_size = data["train_batch_size"]
-        if "validation_batch_size" in data: validation_batch_size = data["validation_batch_size"]
-        if "train_crop" in data: train_crop = data["train_crop"]
-        if "validation_crop" in data: validation_crop = data["validation_crop"]
-        if "resume_path" in data: resume_path = data["resume_path"]
-        if "discriminator_num_features" in data: discriminator_num_features = data["discriminator_num_features"]
-        if "num_workers" in data: num_workers = data["num_workers"]
-        if "l1_coeff" in data: l1_coeff = data["l1_coeff"]
-        if "vgg_coeff" in data: vgg_coeff = data["vgg_coeff"]
-        if "gan_coeff" in data: gan_coeff = data["gan_coeff"]
-        if "max_images_log" in data: max_images_log = data["max_images_log"]
-        if "every_n" in data: every_n = data["every_n"]
-        if "scheduler" in data: scheduler = data["scheduler"]
-        if "warmup" in data: warmup = data["warmup"]
-        if "best_metric" in data: best_metric = data["best_metric"]
-        if "expand_on" in data: expand_on = data["expand_on"]
+    # Command line parser
+    parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
+    parser.add_argument("--json", type=str, default=None,
+                        help="JSON file with training arguments as parser.")
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Checkpoint containing info for resuming training.")
+    args = parser.parse_args()
+
+    # Raise error if no JSON file passed.
+    if not args.json:
+        raise ValueError("No JSON file passed.")
+
+    # Read arguments from JSON file.
+    with open(args.json, "r") as file:
+        data = json.load(file)
+
+    # Search for missing required arguments
+    missing_req = []
+    for arg in REQ_ARGUMENTS:
+        if arg not in data:
+            missing_req.append(arg)
+
+    # If any required argument is missing, raise error.
+    if missing_req:
+        raise ValueError(f"Some required arguments were not passed: {missing_req}")
+
+    # Assign required arguments.
+    tr_path = data["tr_path"]
+    val_path = data["val_path"]
+    epochs = data["epochs"]
+    generator_lr = data["generator_lr"]
+    discriminator_lr = data["discriminator_lr"]
+    train_batch_size = data["train_batch_size"]
+    validation_batch_size = data["validation_batch_size"]
+    train_crop = data["train_crop"]
+    validation_crop = data["validation_crop"]
+    num_workers = data["num_workers"]
+    max_images_log = data["max_images_log"]
+    gan_coeff = data["gan_coeff"]
+    every_n = data["every_n"]
+    discriminator_type = data["discriminator_type"]
+    generator_type = data["generator_type"]
+    supervised_loss_type = data["supervised_loss_type"]
+
+    best_metric = data["best_metric"] if "best_metric" in data else -1
+    generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
+    discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
+
+    supervised_criterion = None
+    if supervised_loss_type == "VGGPerceptual":
+        if "l1_coeff" not in data or "vgg_coeff" not in data:
+            raise ValueError("Not all VGGPerceptual parameters were given.")
+        supervised_criterion = VGGPerceptual(l1_coeff=data["l1_coeff"], vgg_coeff=data["vgg_coeff"])
+
+    discriminator = None
+    if discriminator_type == "ConvDiscriminator":
+        if "num_discriminator_features" not in data or "num_deep_layers" not in data:
+            raise ValueError("Not all ConvDiscriminator parameters were given.")
+        discriminator = ConvDiscriminator(num_channels=6, num_features=data["num_discriminator_features"],
+                                          num_deep_layers=data["num_deep_layers"]).to(DEVICE)
+    dis_optimizer = torch.optim.Adam(discriminator.parameters(),
+                                     lr=discriminator_lr if isinstance(discriminator_lr, float) else
+                                     discriminator_lr[0], betas=(0.5, 0.999))
+
+    generator = None
+    if generator_type == "RDN":
+        generator = rdn.RDN(SCALE, 3, 64, 64, 16, 8).to(DEVICE)
+    gen_optimizer = torch.optim.Adam(generator.parameters(),
+                                     lr=generator_lr if isinstance(generator_lr, float) else
+                                     generator_lr[0], betas=(0.5, 0.999))
+
+    gen_criterion = LSGANGenLoss()
+    dis_criterion = LSGANDisLoss()
+    start_epoch = 0
+    validation_metric = PSNR()
 
     # Transform for converting image from training ImageFolder to tensor.
     train_transform = transforms.Compose([
@@ -104,44 +137,26 @@ if __name__ == "__main__":
 
     sw = SummaryWriter()
 
-    # General training parameters.
-    generator = rdn.RDN(SCALE, 3, 64, 64, 16, 8).to(DEVICE)
-    discriminator = ExtendedConvDiscriminator(num_channels=6, num_features=discriminator_num_features).to(DEVICE)
-    supervised_criterion = VGGPerceptual(l1_coeff=l1_coeff, vgg_coeff=vgg_coeff)
-    gen_criterion = LSGANGenLoss()
-    dis_criterion = LSGANDisLoss()
-    gen_optimizer = torch.optim.Adam(generator.parameters(), lr=generator_lr, betas=(0.5, 0.999))
-    dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=discriminator_lr, betas=(0.5, 0.999))
-    start_epoch = 0
-    epochs = epochs
-    validation_metric = PSNR()
-
     # If resume was requested, load all parameters from passed checkpoint file.
-    if resume_path:
-        checkpoint = torch.load(resume_path)
+    if args.resume:
+        checkpoint = torch.load(args.resume)
         generator.load_state_dict(checkpoint["generator"])
         discriminator.load_state_dict(checkpoint["discriminator"])
         gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
         dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
-        warmup = checkpoint["warmup"]
-        scheduler = checkpoint["scheduler"]
         start_epoch = checkpoint["epoch"]
-        epochs = checkpoint["epochs"]
-        max_images_log = checkpoint["max_images"]
-        every_n = checkpoint["every_n"]
-        gan_coeff = checkpoint["gan_coeff"]
         best_metric = checkpoint["best_metric"]
 
-    elif expand_on:
-        checkpoint = torch.load(expand_on)
-        generator.load_state_dict(checkpoint["generator"])
-        gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
-        dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
-        discriminator.load_state_dict(checkpoint["discriminator"])
-        start_epoch = checkpoint["epoch"]
-        max_images_log = checkpoint["max_images"]
-        every_n = checkpoint["every_n"]
-        gan_coeff = checkpoint["gan_coeff"]
+    # elif expand_on:
+    #     checkpoint = torch.load(expand_on)
+    #     generator.load_state_dict(checkpoint["generator"])
+    #     gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
+    #     dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
+    #     discriminator.load_state_dict(checkpoint["discriminator"])
+    #     start_epoch = checkpoint["epoch"]
+    #     max_images_log = checkpoint["max_images"]
+    #     every_n = checkpoint["every_n"]
+    #     gan_coeff = checkpoint["gan_coeff"]
 
     train_gan(generator=generator,
               discriminator=discriminator,
@@ -158,8 +173,10 @@ if __name__ == "__main__":
               validation_loader=validation_loader,
               lr_transform=lr_transform,
               validation_transform=validation_transform,
-              scheduler=scheduler,
-              warmup=warmup,
+              gen_scheduler=None if isinstance(generator_lr, float) else generator_lr,
+              dis_scheduler=None if isinstance(discriminator_lr, float) else discriminator_lr,
+              gen_warmup=generator_warmup,
+              dis_warmup=discriminator_warmup,
               summary_writer=sw,
               max_images=max_images_log,
               every_n=every_n,

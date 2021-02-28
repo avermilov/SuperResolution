@@ -10,72 +10,72 @@ from scripts.validation import validate
 from settings import *
 
 
-def train(net: nn.Module,
-          epochs: int,
-          train_criterion,
-          validation_criterion,
-          optimizer: optim.Optimizer,
-          train_loader: DataLoader,
-          validation_loader: DataLoader,
-          lr_transform: transforms.Compose,
-          validation_transform: transforms.Compose,
-          scheduler: List[float] = None,
-          warmup: List[float] = None,
-          summary_writer: SummaryWriter = None,
-          max_images=0,
-          every_n: int = 1):
-    net.train()
-
-    running_loss = 0
-    total_images = 0
-    minibatch_number = 0
-    for epoch in range(epochs):
-        # If scheduler was passed, change lr to the one specified at each epoch.
-        if scheduler:
-            for g in optimizer.param_groups:
-                g["lr"] = scheduler[epoch]
-
-        for i, hr_image in tqdm(enumerate(train_loader)):
-            # If warmup was passed, apply to mini_batch only during the first epoch.
-            if warmup:
-                if i < len(warmup):
-                    for g in optimizer.param_groups:
-                        g["lr"] = warmup[i]
-                else:
-                    warmup = None
-
-            # Get proper hr minibatch and lr minibatch
-            hr_image = hr_image[0]
-            lr_image = lr_transform(hr_image)
-            lr_image, hr_image = lr_image.to(DEVICE), hr_image.to(DEVICE)
-
-            # Update amount of images looped over, calculate loss and add to running.
-            total_images += hr_image.shape[0]
-            sr_image = net(lr_image)
-            loss = train_criterion(sr_image, hr_image)
-            running_loss += loss.item()
-
-            # Do backprop
-            loss.backward()
-            optimizer.step()
-            optimizer.zero_grad()
-
-            # Update learning rate and loss to logging
-            if summary_writer:
-                learning_rate = next(iter(optimizer.param_groups))["lr"]
-                summary_writer.add_scalar(LEARNING_RATE_NAME, learning_rate,
-                                          global_step=i + epoch * len(train_loader))
-
-                if (i + 1) % every_n == 0:
-                    summary_writer.add_scalar(SUPERVISED_LOSS_NAME, running_loss / total_images,
-                                              global_step=minibatch_number)
-                    minibatch_number += 1
-
-            # Validate model
-        with torch.no_grad():
-            acc = validate(net, validation_criterion, validation_loader,
-                           validation_transform, epoch, summary_writer, max_images)
-            torch.save(net.state_dict(), CHECKPOINTS_PATH + f"Epoch{epoch:03}_Acc{acc:.3}.pth")
+# def train(net: nn.Module,
+#           epochs: int,
+#           train_criterion,
+#           validation_criterion,
+#           optimizer: optim.Optimizer,
+#           train_loader: DataLoader,
+#           validation_loader: DataLoader,
+#           lr_transform: transforms.Compose,
+#           validation_transform: transforms.Compose,
+#           scheduler: List[float] = None,
+#           warmup: List[float] = None,
+#           summary_writer: SummaryWriter = None,
+#           max_images=0,
+#           every_n: int = 1):
+#     net.train()
+#
+#     running_loss = 0
+#     total_images = 0
+#     minibatch_number = 0
+#     for epoch in range(epochs):
+#         # If scheduler was passed, change lr to the one specified at each epoch.
+#         if scheduler:
+#             for g in optimizer.param_groups:
+#                 g["lr"] = scheduler[epoch]
+#
+#         for i, hr_image in tqdm(enumerate(train_loader)):
+#             # If warmup was passed, apply to mini_batch only during the first epoch.
+#             if warmup:
+#                 if i < len(warmup):
+#                     for g in optimizer.param_groups:
+#                         g["lr"] = warmup[i]
+#                 else:
+#                     warmup = None
+#
+#             # Get proper hr minibatch and lr minibatch
+#             hr_image = hr_image[0]
+#             lr_image = lr_transform(hr_image)
+#             lr_image, hr_image = lr_image.to(DEVICE), hr_image.to(DEVICE)
+#
+#             # Update amount of images looped over, calculate loss and add to running.
+#             total_images += hr_image.shape[0]
+#             sr_image = net(lr_image)
+#             loss = train_criterion(sr_image, hr_image)
+#             running_loss += loss.item()
+#
+#             # Do backprop
+#             loss.backward()
+#             optimizer.step()
+#             optimizer.zero_grad()
+#
+#             # Update learning rate and loss to logging
+#             if summary_writer:
+#                 learning_rate = next(iter(optimizer.param_groups))["lr"]
+#                 summary_writer.add_scalar(LEARNING_RATE_NAME, learning_rate,
+#                                           global_step=i + epoch * len(train_loader))
+#
+#                 if (i + 1) % every_n == 0:
+#                     summary_writer.add_scalar(SUPERVISED_LOSS_NAME, running_loss / total_images,
+#                                               global_step=minibatch_number)
+#                     minibatch_number += 1
+#
+#             # Validate model
+#         with torch.no_grad():
+#             acc = validate(net, validation_criterion, validation_loader,
+#                            validation_transform, epoch, summary_writer, max_images)
+#             torch.save(net.state_dict(), CHECKPOINTS_PATH + f"Epoch{epoch:03}_Acc{acc:.3}.pth")
 
 
 def train_gan(generator: nn.Module,
@@ -93,8 +93,10 @@ def train_gan(generator: nn.Module,
               validation_loader: DataLoader,
               lr_transform: transforms.Compose,
               validation_transform: transforms.Compose,
-              scheduler: List[float] = None,
-              warmup: List[float] = None,
+              gen_scheduler: List[float] = None,
+              dis_scheduler: List[float] = None,
+              gen_warmup: List[float] = None,
+              dis_warmup: List[float] = None,
               summary_writer: SummaryWriter = None,
               max_images=0,
               every_n: int = 1,
@@ -103,9 +105,12 @@ def train_gan(generator: nn.Module,
 
     for epoch in range(start_epoch, epochs):
         # If scheduler was passed, change lr to the one specified at each epoch.
-        if scheduler:
+        if gen_scheduler:
             for g in gen_optimizer.param_groups:
-                g["lr"] = scheduler[epoch]
+                g["lr"] = gen_scheduler[epoch]
+        if dis_scheduler:
+            for g in dis_optimizer.param_groups:
+                g["lr"] = dis_scheduler[epoch]
 
         generator.train()
         discriminator.train()
@@ -118,12 +123,18 @@ def train_gan(generator: nn.Module,
 
         for i, hr_images in tqdm(enumerate(train_loader)):
             # If warmup was passed, apply to mini_batch ONLY during the first epoch.
-            if warmup:
-                if i < len(warmup):
+            if gen_warmup:
+                if i < len(gen_warmup):
                     for g in gen_optimizer.param_groups:
-                        g["lr"] = warmup[i]
+                        g["lr"] = gen_warmup[i]
                 else:
-                    warmup = None
+                    gen_warmup = None
+            if dis_warmup:
+                if i < len(dis_warmup):
+                    for g in dis_optimizer.param_groups:
+                        g["lr"] = dis_warmup[i]
+                else:
+                    dis_warmup = None
 
             # Get proper hr minibatch and lr minibatch.
             hr_images = hr_images[0]
@@ -142,15 +153,17 @@ def train_gan(generator: nn.Module,
 
             # Get concatenated images for conditional GAN
             scaled_lr_images = F.interpolate(lr_images, scale_factor=2, mode="bicubic", align_corners=True)
-            concat_outputs = torch.cat((sr_images, scaled_lr_images), 1)
-            concat_hr = torch.cat((hr_images, scaled_lr_images), 1)
+            concat_outputs = torch.cat((sr_images, scaled_lr_images), 1).to(DEVICE)
+            concat_hr = torch.cat((hr_images, scaled_lr_images), 1).to(DEVICE)
 
             discriminator.requires_grad(False)
 
             # Calculate supervised loss and total generator loss.
             supervised_loss = supervised_criterion(sr_images, hr_images)
+            dis_out = discriminator(concat_outputs)
+            dis_hr = discriminator(concat_hr)
             generator_loss = supervised_loss + \
-                             gan_loss_coeff * gen_criterion(discriminator(concat_outputs), discriminator(concat_hr))
+                             gan_loss_coeff * gen_criterion(dis_out, dis_hr)
             # Update cumulative losses counts.
             running_super_loss += supervised_loss.item()
             running_gen_loss += generator_loss.item()
@@ -187,19 +200,13 @@ def train_gan(generator: nn.Module,
         # Validate model
         with torch.no_grad():
             metric = validate(generator, validation_metric, validation_loader,
-                              validation_transform, epoch, summary_writer, max_images)
+                              validation_transform, epoch, start_epoch, summary_writer, max_images)
             checkpoint_dict = {
                 "epoch": epoch + 1,
-                "epochs": epochs,
                 "generator": generator.state_dict(),
                 "discriminator": discriminator.state_dict(),
                 "gen_optimizer": gen_optimizer.state_dict(),
                 "dis_optimizer": dis_optimizer.state_dict(),
-                "warmup": warmup,
-                "scheduler": scheduler,
-                "max_images": max_images,
-                "every_n": every_n,
-                "gan_coeff": gan_loss_coeff,
                 "best_metric": best_metric
             }
             if metric > best_metric:
