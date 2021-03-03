@@ -159,7 +159,6 @@ def train_gan(generator: nn.Module,
             concat_hr = torch.cat((hr_images, scaled_lr_images), 1).to(DEVICE)
 
             discriminator.requires_grad(False)
-
             # Calculate supervised loss and total generator loss.
             supervised_loss = supervised_criterion(sr_images, hr_images)
             dis_out = discriminator(concat_outputs)

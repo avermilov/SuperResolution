@@ -55,7 +55,7 @@ if __name__ == "__main__":
     tr_path = data["tr_path"]
     val_path = data["val_path"]
     epochs = data["epochs"]
-    generator_lr = data["generator_lr"]
+    generator_lr_dict = data["generator_lr"]
     discriminator_lr = data["discriminator_lr"]
     train_batch_size = data["train_batch_size"]
     validation_batch_size = data["validation_batch_size"]
@@ -70,9 +70,17 @@ if __name__ == "__main__":
     supervised_loss_type = data["supervised_loss_type"]
     save_name = data["save_name"]
 
+    # Optional parameters
     best_metric = data["best_metric"] if "best_metric" in data else -1
     generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
     discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
+
+    # Convert generator lr to proper list if dict was passed
+    generator_lr = generator_lr_dict
+    if isinstance(generator_lr_dict, dict):
+        generator_lr = []
+        for lr, count in generator_lr_dict.items():
+            generator_lr += [float(lr)] * count
 
     # Use specified supervised_criterion
     supervised_criterion = None

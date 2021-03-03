@@ -38,9 +38,9 @@ class VGGPerceptual(nn.Module):
         for param in self.validation_model.parameters():
             param.requires_grad = False
         # Create L1 loss for measuring distance
-        self.loss = nn.L1Loss()
+        self.l1_loss = nn.L1Loss()
 
     def forward(self, input: torch.tensor, target: torch.tensor) -> torch.tensor:
-        l1 = self.loss(input, target)
-        l1_features = self.loss(self.validation_model(input), self.validation_model(target))
+        l1 = self.l1_loss(input, target)
+        l1_features = self.l1_loss(self.validation_model(input), self.validation_model(target))
         return self.l1_coeff * l1 + self.vgg_coeff * l1_features
