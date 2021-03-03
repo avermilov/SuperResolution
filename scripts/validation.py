@@ -48,7 +48,7 @@ def validate(net: nn.Module,
                             resized_image = resize_transform(lr_image[i])
                             resized_image = (resized_image + 1) / 2
                             resized_image = torch.clamp(resized_image, min=0, max=1)
-                            summary_writer.add_image(f"Validation/Image{images_logged:03}/LR Bicubic", resized_image,
+                            summary_writer.add_image(f"Validation/Image{images_logged:03}/LR BI", resized_image,
                                                      global_step=epoch)
 
                             # Log high res image once only

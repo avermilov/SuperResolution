@@ -9,9 +9,9 @@ from torchvision import transforms
 
 from scripts.losses import LSGANDisLoss, LSGANGenLoss, VGGPerceptual
 from scripts.training import train_gan
-from models import rdn
+from models.generators import rdn, esrgan_generator
 from settings import DEVICE
-from models.conv_discriminator import ConvDiscriminator
+from models.discriminators import conv_discriminator, esrgan_discriminator
 from scripts.metrics import PSNR, worker_init_fn
 import json
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     REQ_ARGUMENTS = ["tr_path", "val_path", "epochs", "generator_lr", "discriminator_lr",
                      "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
                      "num_workers", "max_images_log", "gan_coeff", "every_n",
-                     "discriminator_type", "generator_type", "supervised_loss_type"]
+                     "discriminator_type", "generator_type", "supervised_loss_type", "save_name"]
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
@@ -68,30 +68,39 @@ if __name__ == "__main__":
     discriminator_type = data["discriminator_type"]
     generator_type = data["generator_type"]
     supervised_loss_type = data["supervised_loss_type"]
+    save_name = data["save_name"]
 
     best_metric = data["best_metric"] if "best_metric" in data else -1
     generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
     discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
 
+    # Use specified supervised_criterion
     supervised_criterion = None
     if supervised_loss_type == "VGGPerceptual":
         if "l1_coeff" not in data or "vgg_coeff" not in data:
             raise ValueError("Not all VGGPerceptual parameters were given.")
         supervised_criterion = VGGPerceptual(l1_coeff=data["l1_coeff"], vgg_coeff=data["vgg_coeff"])
 
+    # Use specified discriminator
     discriminator = None
-    if discriminator_type == "ConvDiscriminator":
+    if discriminator_type == "ConvDis":
         if "num_discriminator_features" not in data or "num_deep_layers" not in data:
             raise ValueError("Not all ConvDiscriminator parameters were given.")
-        discriminator = ConvDiscriminator(num_channels=6, num_features=data["num_discriminator_features"],
-                                          num_deep_layers=data["num_deep_layers"]).to(DEVICE)
+        discriminator = conv_discriminator.ConvDiscriminator(num_channels=6,
+                                                             num_features=data["num_discriminator_features"],
+                                                             num_deep_layers=data["num_deep_layers"]).to(DEVICE)
+    elif discriminator_type == "ESRDis":
+        discriminator = esrgan_discriminator.Discriminator(num_channels=6).to(DEVICE)
     dis_optimizer = torch.optim.Adam(discriminator.parameters(),
                                      lr=discriminator_lr if isinstance(discriminator_lr, float) else
                                      discriminator_lr[0], betas=(0.5, 0.999))
 
+    # Use specified generator
     generator = None
     if generator_type == "RDN":
         generator = rdn.RDN(SCALE, 3, 64, 64, 16, 8).to(DEVICE)
+    elif generator_type == "ESRGen":
+        generator = esrgan_generator.esrgan16(pretrained=False).to(DEVICE)
     gen_optimizer = torch.optim.Adam(generator.parameters(),
                                      lr=generator_lr if isinstance(generator_lr, float) else
                                      generator_lr[0], betas=(0.5, 0.999))
@@ -180,4 +189,5 @@ if __name__ == "__main__":
               summary_writer=sw,
               max_images=max_images_log,
               every_n=every_n,
-              best_metric=best_metric)
+              best_metric=best_metric,
+              save_name=save_name)

@@ -6,7 +6,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from tqdm import tqdm
 from scripts.validation import validate
-
+from progressbar import progressbar
 from settings import *
 
 
@@ -100,7 +100,8 @@ def train_gan(generator: nn.Module,
               summary_writer: SummaryWriter = None,
               max_images=0,
               every_n: int = 1,
-              best_metric: float = -1):
+              best_metric: float = -1,
+              save_name: str = ""):
     minibatch_number = len(train_loader) * start_epoch // every_n
 
     for epoch in range(start_epoch, epochs):
@@ -121,7 +122,8 @@ def train_gan(generator: nn.Module,
         running_super_loss = 0
         total_images = 0
 
-        for i, hr_images in tqdm(enumerate(train_loader)):
+        pbar = tqdm(total=len(train_loader.dataset))
+        for i, hr_images in enumerate(train_loader):
             # If warmup was passed, apply to mini_batch ONLY during the first epoch.
             if gen_warmup:
                 if i < len(gen_warmup):
@@ -193,6 +195,9 @@ def train_gan(generator: nn.Module,
                                               global_step=minibatch_number)
                     minibatch_number += 1
 
+            pbar.update(hr_images.shape[0])
+        pbar.close()
+
         if summary_writer:
             learning_rate = next(iter(gen_optimizer.param_groups))["lr"]
             summary_writer.add_scalar(LEARNING_RATE_NAME, learning_rate,
@@ -211,4 +216,4 @@ def train_gan(generator: nn.Module,
             }
             if metric > best_metric:
                 best_metric = metric
-                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"GAN_Epoch{epoch:03}_Acc{metric:.5}.pth")
+                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Acc{metric:.5}.pth")
