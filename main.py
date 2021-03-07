@@ -10,6 +10,7 @@ from torchvision import transforms
 from scripts.losses import LSGANDisLoss, LSGANGenLoss, VGGPerceptual
 from scripts.training import train_gan
 from models.generators import rdn, esrgan_generator
+from scripts.transforms import get_train_lr_transform, get_validation_lr_transform
 from settings import DEVICE
 from models.discriminators import conv_discriminator, esrgan_discriminator
 from scripts.metrics import PSNR, worker_init_fn
@@ -127,10 +128,11 @@ if __name__ == "__main__":
         transforms.RandomCrop(train_crop, train_crop)
     ])
     # Tranform for getting low res image from high res one.
-    lr_transform = transforms.Compose([
-        transforms.Resize((train_crop // SCALE, train_crop // SCALE),
-                          interpolation=Image.BICUBIC)
-    ])
+    train_lr_transform = get_train_lr_transform(SCALE, train_crop)
+    #     transforms.Compose([
+    #     transforms.Resize((train_crop // SCALE, train_crop // SCALE),
+    #                       interpolation=Image.BICUBIC)
+    # ])
     # Tranform for converting image from validation ImageFolder to tensor.
     validation_dataset_transform = transforms.Compose([
         transforms.ToTensor(),
@@ -138,10 +140,11 @@ if __name__ == "__main__":
         transforms.CenterCrop((validation_crop, validation_crop))
     ])
     # Transform for getting low res image from high res one for validation.
-    validation_transform = transforms.Compose([
-        transforms.Resize((validation_crop // SCALE, validation_crop // SCALE),
-                          interpolation=Image.BICUBIC)
-    ])
+    validation_lr_transform = get_validation_lr_transform(SCALE, validation_crop)
+    #     transforms.Compose([
+    #     transforms.Resize((validation_crop // SCALE, validation_crop // SCALE),
+    #                       interpolation=Image.BICUBIC)
+    # ])
 
     # Initialize datasets and data loaders.
     train_ds = torchvision.datasets.ImageFolder(tr_path, transform=train_transform)
@@ -188,8 +191,8 @@ if __name__ == "__main__":
               validation_metric=validation_metric,
               train_loader=train_loader,
               validation_loader=validation_loader,
-              lr_transform=lr_transform,
-              validation_transform=validation_transform,
+              lr_transform=train_lr_transform,
+              validation_transform=validation_lr_transform,
               gen_scheduler=None if isinstance(generator_lr, float) else generator_lr,
               dis_scheduler=None if isinstance(discriminator_lr, float) else discriminator_lr,
               gen_warmup=generator_warmup,
