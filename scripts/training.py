@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from tqdm import tqdm
-from scripts.validation import validate, validate_paired
+from scripts.validation import validate
 from progressbar import progressbar
 from settings import *
 
