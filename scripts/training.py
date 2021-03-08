@@ -215,21 +215,10 @@ def train_gan(generator: nn.Module,
                 "dis_optimizer": dis_optimizer.state_dict(),
                 "best_metric": best_metric
             }
-            if metric > best_metric:
+            if metric[0] > best_metric or not saved_something and epoch == epochs - 1:
                 saved_something = True
                 best_metric = metric
-                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Acc{metric:.5}.pth")
-
-    if not saved_something:
-        checkpoint_dict = {
-            "epoch": epochs,
-            "generator": generator.state_dict(),
-            "discriminator": discriminator.state_dict(),
-            "gen_optimizer": gen_optimizer.state_dict(),
-            "dis_optimizer": dis_optimizer.state_dict(),
-            "best_metric": best_metric
-        }
-        torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Acc{metric:.5}.pth")
+                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Acc{metric[0]:.5}.pth")
 
 # def train_gan_paired(generator: nn.Module,
 #                      discriminator: nn.Module,

@@ -1,25 +1,30 @@
+from collections import defaultdict
+
 from PIL import Image
 from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
+from typing import List
 
 from settings import *
 
 
 def validate(net: nn.Module,
-             criterion,
+             metrics,
              validation_loader: DataLoader,
              validation_transform,
              epoch: int,
              start_epoch: int,
              summary_writer: SummaryWriter = None,
-             max_images: int = 0) -> float:
+             max_images: int = 0) -> List[float]:
     net.eval()
 
     # Initialize values
     running_loss = 0
     images_logged = 0
+
+    running_losses = defaultdict(int)
 
     # Get resize
     shape = next(iter(validation_loader))[0].shape
@@ -33,10 +38,19 @@ def validate(net: nn.Module,
 
             # Generate super res images and calculate loss
             sr_image = net(lr_image)
-            loss = criterion(sr_image, hr_image)
 
-            # Add calculated loss to running loss
-            running_loss += loss.item()
+            for name, metric in metrics.items():
+                if name == "ssim":
+                    sr_image_normalized = (sr_image + 1) / 2
+                    hr_image_normalized = (hr_image + 1) / 2
+                    loss = metric(sr_image_normalized, hr_image_normalized)
+                    running_losses[name] += loss.item()
+                elif name == "psnr":
+                    loss = metric(sr_image, hr_image)
+                    running_losses[name] += loss.item()
+                else:
+                    loss = metric(sr_image, hr_image)
+                    running_losses[name] += torch.mean(loss).item()
 
             # If summary writer passed, log to tensorboard
             if summary_writer:
@@ -65,15 +79,16 @@ def validate(net: nn.Module,
                     else:
                         break
 
-    total_loss = running_loss / len(validation_loader)
-
-    # If summary writer passed, log total loss to tensorboard
+    # If summary writer passed, log total losses to tensorboard
+    total_losses = []
     if summary_writer:
-        summary_writer.add_scalar(VALIDATION_NAME, total_loss, global_step=epoch)
+        for name, run_loss in running_losses.items():
+            total_loss = run_loss / len(validation_loader)
+            total_losses.append(total_loss)
+            summary_writer.add_scalar(METRIC_NAMES[name], total_loss, global_step=epoch)
 
     net.train()
-    return total_loss
-
+    return total_losses
 
 # def validate_paired(net: nn.Module,
 #                     criterion,

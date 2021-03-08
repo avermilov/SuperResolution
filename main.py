@@ -13,8 +13,9 @@ from models.generators import rdn, esrgan_generator
 from scripts.transforms import get_train_lr_transform, get_validation_lr_transform
 from settings import DEVICE
 from models.discriminators import conv_discriminator, esrgan_discriminator
-from scripts.metrics import PSNR, worker_init_fn
+from scripts.metrics import PSNR, worker_init_fn, ssim
 import json
+import lpips
 
 if __name__ == "__main__":
     # Upscaling parameter
@@ -24,7 +25,8 @@ if __name__ == "__main__":
     REQ_ARGUMENTS = ["tr_path", "val_path", "epochs", "generator_lr", "discriminator_lr",
                      "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
                      "num_workers", "max_images_log", "gan_coeff", "every_n",
-                     "discriminator_type", "generator_type", "supervised_loss_type", "save_name"]
+                     "discriminator_type", "generator_type", "supervised_loss_type", "save_name",
+                     "metrics"]
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
@@ -70,11 +72,16 @@ if __name__ == "__main__":
     generator_type = data["generator_type"]
     supervised_loss_type = data["supervised_loss_type"]
     save_name = data["save_name"]
+    metrics_names = data["metrics"]
 
     # Optional parameters
     best_metric = data["best_metric"] if "best_metric" in data else -1
     generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
     discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
+
+    # Raise error if no metrics were passed
+    if not metrics_names:
+        raise ValueError("No validation metrics passed.")
 
     # Convert generator lr to proper list if dict was passed
     generator_lr = generator_lr_dict
@@ -114,10 +121,17 @@ if __name__ == "__main__":
                                      lr=generator_lr if isinstance(generator_lr, float) else
                                      generator_lr[0], betas=(0.5, 0.999))
 
+    # Use specified metrics for validation
+    metrics = dict()
+    metric_dict = {"psnr": PSNR(), "lpips_alex": lpips.LPIPS(net="alex").to(DEVICE),
+                   "lpips_vgg": lpips.LPIPS(net="vgg").to(DEVICE), "ssim": ssim}
+    for name, metric in metric_dict.items():
+        if name in metrics_names:
+            metrics[name] = metric
+
     gen_criterion = LSGANGenLoss()
     dis_criterion = LSGANDisLoss()
     start_epoch = 0
-    validation_metric = PSNR()
 
     # Transform for converting image from training ImageFolder to tensor.
     train_transform = transforms.Compose([
@@ -188,7 +202,7 @@ if __name__ == "__main__":
               gan_loss_coeff=gan_coeff,
               start_epoch=start_epoch,
               epochs=epochs,
-              validation_metric=validation_metric,
+              metrics=metrics,
               train_loader=train_loader,
               validation_loader=validation_loader,
               lr_transform=train_lr_transform,
