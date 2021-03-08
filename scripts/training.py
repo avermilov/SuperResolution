@@ -88,7 +88,7 @@ def train_gan(generator: nn.Module,
               gan_loss_coeff: float,
               start_epoch: int,
               epochs: int,
-              validation_metric,
+              metrics,
               train_loader: DataLoader,
               validation_loader: DataLoader,
               lr_transform: transforms.Compose,
@@ -103,6 +103,7 @@ def train_gan(generator: nn.Module,
               best_metric: float = -1,
               save_name: str = ""):
     minibatch_number = len(train_loader) * start_epoch // every_n
+    saved_something = False
 
     for epoch in range(start_epoch, epochs):
         # If scheduler was passed, change lr to the one specified at each epoch.
@@ -163,8 +164,9 @@ def train_gan(generator: nn.Module,
             supervised_loss = supervised_criterion(sr_images, hr_images)
             dis_out = discriminator(concat_outputs)
             dis_hr = discriminator(concat_hr)
+            gan_loss = gen_criterion(dis_out, dis_hr)
             generator_loss = supervised_loss + \
-                             gan_loss_coeff * gen_criterion(dis_out, dis_hr)
+                             gan_loss_coeff * gan_loss
             # Update cumulative losses counts.
             running_super_loss += supervised_loss.item()
             running_gen_loss += generator_loss.item()
@@ -203,7 +205,7 @@ def train_gan(generator: nn.Module,
                                       global_step=epoch)
         # Validate model
         with torch.no_grad():
-            metric = validate(generator, validation_metric, validation_loader,
+            metric = validate(generator, metrics, validation_loader,
                               validation_transform, epoch, start_epoch, summary_writer, max_images)
             checkpoint_dict = {
                 "epoch": epoch + 1,
@@ -214,9 +216,20 @@ def train_gan(generator: nn.Module,
                 "best_metric": best_metric
             }
             if metric > best_metric:
+                saved_something = True
                 best_metric = metric
                 torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Acc{metric:.5}.pth")
 
+    if not saved_something:
+        checkpoint_dict = {
+            "epoch": epochs,
+            "generator": generator.state_dict(),
+            "discriminator": discriminator.state_dict(),
+            "gen_optimizer": gen_optimizer.state_dict(),
+            "dis_optimizer": dis_optimizer.state_dict(),
+            "best_metric": best_metric
+        }
+        torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Acc{metric:.5}.pth")
 
 # def train_gan_paired(generator: nn.Module,
 #                      discriminator: nn.Module,
