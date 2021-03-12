@@ -5,12 +5,20 @@ from torch import nn as nn
 from settings import DEVICE
 
 
-class LSGANDisLoss(nn.Module):
+class LSGANDisFakeLoss(nn.Module):
     def __init__(self):
-        super(LSGANDisLoss, self).__init__()
+        super(LSGANDisFakeLoss, self).__init__()
 
-    def forward(self, fake: torch.tensor, real: torch.tensor) -> torch.tensor:
-        return torch.mean(fake ** 2 + (real - 1) ** 2)
+    def forward(self, fake: torch.tensor) -> torch.tensor:
+        return torch.mean(fake ** 2)
+
+
+class LSGANDisRealLoss(nn.Module):
+    def __init__(self):
+        super(LSGANDisRealLoss, self).__init__()
+
+    def forward(self, real: torch.tensor) -> torch.tensor:
+        return torch.mean((real - 1) ** 2)
 
 
 class LSGANGenLoss(nn.Module):

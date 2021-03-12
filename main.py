@@ -6,8 +6,9 @@ from PIL import Image
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
+from torchvision.datasets import ImageFolder
 
-from scripts.losses import LSGANDisLoss, LSGANGenLoss, VGGPerceptual
+from scripts.losses import LSGANDisFakeLoss, LSGANDisRealLoss, LSGANGenLoss, VGGPerceptual
 from scripts.training import train_gan
 from models.generators import rdn, esrgan_generator
 from scripts.transforms import get_train_lr_transform, get_validation_lr_transform
@@ -130,7 +131,8 @@ if __name__ == "__main__":
             metrics[name] = metric
 
     gen_criterion = LSGANGenLoss()
-    dis_criterion = LSGANDisLoss()
+    dis_fake_criterion = LSGANDisFakeLoss()
+    dis_real_criterion = LSGANDisRealLoss()
     start_epoch = 0
 
     # Transform for converting image from training ImageFolder to tensor.
@@ -196,7 +198,7 @@ if __name__ == "__main__":
               discriminator=discriminator,
               supervised_criterion=supervised_criterion,
               gen_criterion=gen_criterion,
-              dis_criterion=dis_criterion,
+              dis_criterions=[dis_fake_criterion, dis_real_criterion],
               gen_optimizer=gen_optimizer,
               dis_optimizer=dis_optimizer,
               gan_loss_coeff=gan_coeff,
