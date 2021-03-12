@@ -31,7 +31,7 @@ train_kernels, valid_kernels = torch.utils.data.random_split(
 train_kernels = [kernel for kernel in train_kernels]
 valid_kernels = [kernel for kernel in valid_kernels]
 
-noises_path = "noises/"
+noises_path = "noises_strength03/"
 noises_transforms = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))

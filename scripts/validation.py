@@ -21,7 +21,6 @@ def validate(net: nn.Module,
     net.eval()
 
     # Initialize values
-    running_loss = 0
     images_logged = 0
 
     running_losses = defaultdict(int)
@@ -58,18 +57,17 @@ def validate(net: nn.Module,
                 for i in range(hr_image.shape[0]):
                     if images_logged < max_images:
                         if epoch - start_epoch <= 1:
-                            # Log bicubic resized image once only
-                            resized_image = resize_transform(lr_image[i])
-                            resized_image = (resized_image + 1) / 2
-                            resized_image = torch.clamp(resized_image, min=0, max=1)
-                            summary_writer.add_image(f"Validation/Image{images_logged:03}/LR BI", resized_image,
-                                                     global_step=epoch)
-
                             # Log high res image once only
                             hr = (hr_image[i] + 1) / 2
                             hr = torch.clamp(hr, min=0, max=1)
                             summary_writer.add_image(f"Validation/Image{images_logged:03}/HR", hr, global_step=epoch)
 
+                        # Log bicubic resized image once only
+                        resized_image = resize_transform(lr_image[i])
+                        resized_image = (resized_image + 1) / 2
+                        resized_image = torch.clamp(resized_image, min=0, max=1)
+                        summary_writer.add_image(f"Validation/Image{images_logged:03}/LR BI", resized_image,
+                                                 global_step=epoch)
                         # Log super resolution image
                         sr = (sr_image[i] + 1) / 2
                         sr = torch.clamp(sr, min=0, max=1)
@@ -89,4 +87,3 @@ def validate(net: nn.Module,
 
     net.train()
     return total_losses
-
