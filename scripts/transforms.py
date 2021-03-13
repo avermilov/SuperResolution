@@ -1,55 +1,64 @@
-import cv2
-import torch
 import os
-import scipy.io as sio
-import torch.nn.functional as F
-import torch.nn as nn
 from random import choice
-import numpy as np
-from PIL import Image
-
-from torchvision import transforms
 from typing import List
 
+import scipy.io as sio
+import torch
+import torch.nn.functional as F
+from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
-KERNEL_PATH = "kernels/"
-kernels = []
-for filename in os.listdir(KERNEL_PATH):
-    mat = sio.loadmat(os.path.join(KERNEL_PATH, filename))["Kernel"]
-    mat = torch.from_numpy(mat)
-    mat.requires_grad = False
-    mat = torch.unsqueeze(mat, dim=0)
-    mat = torch.unsqueeze(mat, dim=0)
-    kernels.append(mat)
+# Lists of kernels for training and validation.
+train_kernels = None
+valid_kernels = None
+
+# Percentage of kernels and noises going to training pool.
 TRAIN_PERCENTAGE = 0.8
-KERNEL_TRAIN_SIZE = int(TRAIN_PERCENTAGE * len(kernels))
 
-train_kernels, valid_kernels = torch.utils.data.random_split(
-    kernels, [KERNEL_TRAIN_SIZE, len(kernels) - KERNEL_TRAIN_SIZE]
-)
-train_kernels = [kernel for kernel in train_kernels]
-valid_kernels = [kernel for kernel in valid_kernels]
+# Lists of noises for training and validation.
+train_noises = None
+valid_noises = None
 
-noises_path = "noises_strength03/"
-noises_transforms = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-])
-noises_ds = ImageFolder(noises_path, transform=noises_transforms)
-NOISES_TRAIN_SIZE = int(TRAIN_PERCENTAGE * len(noises_ds))
-train_noises, valid_noises = torch.utils.data.random_split(
-    noises_ds, [NOISES_TRAIN_SIZE, len(noises_ds) - NOISES_TRAIN_SIZE]
-)
-train_noises = [noise[0] for noise in train_noises]
-valid_noises = [noise[0] for noise in valid_noises]
-
+# Transforms for cropping noise for training and validation.
 train_crop_transform = None
 valid_crop_transform = None
 
 
-# for kernel in train_kernels:
-#     print(np.max(kernel))
+def load_kernels(kernels_path: str):
+    global train_kernels, valid_kernels
+    kernels = []
+
+    for filename in os.listdir(kernels_path):
+        mat = sio.loadmat(os.path.join(kernels_path, filename))["Kernel"]
+        mat = torch.from_numpy(mat)
+        mat.requires_grad = False
+        mat = torch.unsqueeze(mat, dim=0)
+        mat = torch.unsqueeze(mat, dim=0)
+        kernels.append(mat)
+
+    KERNEL_TRAIN_SIZE = int(TRAIN_PERCENTAGE * len(kernels))
+    train_kernels, valid_kernels = torch.utils.data.random_split(
+        kernels, [KERNEL_TRAIN_SIZE, len(kernels) - KERNEL_TRAIN_SIZE]
+    )
+
+    train_kernels = [kernel for kernel in train_kernels]
+    valid_kernels = [kernel for kernel in valid_kernels]
+
+
+def load_noises(noises_path: str) -> None:
+    global train_noises, valid_noises
+    noises_transforms = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    noises_ds = ImageFolder(noises_path, transform=noises_transforms)
+    NOISES_TRAIN_SIZE = int(TRAIN_PERCENTAGE * len(noises_ds))
+    train_noises, valid_noises = torch.utils.data.random_split(
+        noises_ds, [NOISES_TRAIN_SIZE, len(noises_ds) - NOISES_TRAIN_SIZE]
+    )
+    train_noises = [noise[0] for noise in train_noises]
+    valid_noises = [noise[0] for noise in valid_noises]
+
 
 def inject_noise(images: torch.tensor, noises_list: List[torch.tensor], crop_transform) -> torch.tensor:
     noise = choice(noises_list)

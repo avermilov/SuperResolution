@@ -32,11 +32,12 @@ def train_gan(generator: nn.Module,
               summary_writer: SummaryWriter = None,
               max_images=0,
               every_n: int = 1,
-              best_metric: float = -1,
+              best_metric=-1,
               save_name: str = ""):
     minibatch_number = len(train_loader) * start_epoch // every_n
     dis_fake_criterion, dis_real_criterion = dis_criterions
-    saved_something = False
+
+    save_every = best_metric == "every"
 
     for epoch in range(start_epoch, epochs):
         # If scheduler was passed, change lr to the one specified at each epoch.
@@ -165,7 +166,8 @@ def train_gan(generator: nn.Module,
                 "dis_optimizer": dis_optimizer.state_dict(),
                 "best_metric": best_metric
             }
-            if metric[0] > best_metric or not saved_something and epoch == epochs - 1:
-                saved_something = True
+            if save_every or epoch == epochs - 1:
+                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
+            elif metric[0] > best_metric:
                 best_metric = metric[0]
                 torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")

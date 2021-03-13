@@ -1,22 +1,20 @@
 import argparse
+import json
 
+import lpips
 import torch
 import torchvision
-from PIL import Image
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
-from torchvision.datasets import ImageFolder
 
-from scripts.losses import LSGANDisFakeLoss, LSGANDisRealLoss, LSGANGenLoss, VGGPerceptual
-from scripts.training import train_gan
-from models.generators import rdn, esrgan_generator
-from scripts.transforms import get_train_lr_transform, get_validation_lr_transform
-from settings import DEVICE
 from models.discriminators import conv_discriminator, esrgan_discriminator
+from models.generators import rdn, esrgan_generator
+from scripts.losses import LSGANDisFakeLoss, LSGANDisRealLoss, LSGANGenLoss, VGGPerceptual
 from scripts.metrics import PSNR, worker_init_fn, ssim
-import json
-import lpips
+from scripts.training import train_gan
+from scripts.transforms import get_train_lr_transform, get_validation_lr_transform, load_noises, load_kernels
+from settings import DEVICE
 
 if __name__ == "__main__":
     # Upscaling parameter
@@ -27,7 +25,7 @@ if __name__ == "__main__":
                      "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
                      "num_workers", "max_images_log", "gan_coeff", "every_n",
                      "discriminator_type", "generator_type", "supervised_loss_type", "save_name",
-                     "metrics"]
+                     "metrics", "ker_path", "noises_path"]
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
@@ -74,6 +72,12 @@ if __name__ == "__main__":
     supervised_loss_type = data["supervised_loss_type"]
     save_name = data["save_name"]
     metrics_names = data["metrics"]
+    ker_path = data["ker_path"]
+    noises_path = data["noises_path"]
+
+    # Load noises and kernels
+    load_noises(noises_path)
+    load_kernels(ker_path)
 
     # Optional parameters
     best_metric = data["best_metric"] if "best_metric" in data else -1
@@ -145,22 +149,16 @@ if __name__ == "__main__":
     ])
     # Tranform for getting low res image from high res one.
     train_lr_transform = get_train_lr_transform(SCALE, train_crop)
-    #     transforms.Compose([
-    #     transforms.Resize((train_crop // SCALE, train_crop // SCALE),
-    #                       interpolation=Image.BICUBIC)
-    # ])
+
     # Tranform for converting image from validation ImageFolder to tensor.
     validation_dataset_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
         transforms.CenterCrop((validation_crop, validation_crop))
     ])
+
     # Transform for getting low res image from high res one for validation.
     validation_lr_transform = get_validation_lr_transform(SCALE, validation_crop)
-    #     transforms.Compose([
-    #     transforms.Resize((validation_crop // SCALE, validation_crop // SCALE),
-    #                       interpolation=Image.BICUBIC)
-    # ])
 
     # Initialize datasets and data loaders.
     train_ds = torchvision.datasets.ImageFolder(tr_path, transform=train_transform)
