@@ -179,18 +179,6 @@ if __name__ == "__main__":
         gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
         dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
         start_epoch = checkpoint["epoch"]
-        best_metric = checkpoint["best_metric"]
-
-    # elif expand_on:
-    #     checkpoint = torch.load(expand_on)
-    #     generator.load_state_dict(checkpoint["generator"])
-    #     gen_optimizer.load_state_dict(checkpoint["gen_optimizer"])
-    #     dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
-    #     discriminator.load_state_dict(checkpoint["discriminator"])
-    #     start_epoch = checkpoint["epoch"]
-    #     max_images_log = checkpoint["max_images"]
-    #     every_n = checkpoint["every_n"]
-    #     gan_coeff = checkpoint["gan_coeff"]
 
     train_gan(generator=generator,
               discriminator=discriminator,
