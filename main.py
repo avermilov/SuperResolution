@@ -25,7 +25,7 @@ if __name__ == "__main__":
                      "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
                      "num_workers", "max_images_log", "gan_coeff", "every_n",
                      "discriminator_type", "generator_type", "supervised_loss_type", "save_name",
-                     "metrics", "ker_path", "noises_path"]
+                     "metrics", "ker_path", "noises_path", "supervised_coeff"]
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
@@ -74,6 +74,7 @@ if __name__ == "__main__":
     metrics_names = data["metrics"]
     ker_path = data["ker_path"]
     noises_path = data["noises_path"]
+    supervised_coeff = data["supervised_coeff"]
 
     # Load noises and kernels
     load_noises(noises_path)
@@ -83,6 +84,11 @@ if __name__ == "__main__":
     best_metric = data["best_metric"] if "best_metric" in data else -1
     generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
     discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
+    inference_path = data["inference_source"] if "inference_source" in data else None
+    inference_save_path = data["inference_save_path"] if "inference_save_path" in data else None
+
+    if inference_path and not inference_save_path or not inference_path and inference_save_path:
+        raise ValueError("Must provide both inference source and inference save path.")
 
     # Raise error if no metrics were passed
     if not metrics_names:
@@ -160,14 +166,22 @@ if __name__ == "__main__":
     # Transform for getting low res image from high res one for validation.
     validation_lr_transform = get_validation_lr_transform(SCALE, validation_crop)
 
+    # Transform for converting image from inference ImageFolder to tensor.
+    inference_dataset_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+
     # Initialize datasets and data loaders.
     train_ds = torchvision.datasets.ImageFolder(tr_path, transform=train_transform)
     validation_ds = torchvision.datasets.ImageFolder(val_path, transform=validation_dataset_transform)
+    inference_ds = torchvision.datasets.ImageFolder(inference_path, transform=inference_dataset_transform)
 
     train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True,
                               num_workers=num_workers, worker_init_fn=worker_init_fn)
     validation_loader = DataLoader(validation_ds, batch_size=validation_batch_size,
                                    shuffle=False, num_workers=num_workers)
+    inference_loader = DataLoader(inference_ds, batch_size=1, shuffle=False)
 
     sw = SummaryWriter()
 
@@ -187,6 +201,7 @@ if __name__ == "__main__":
               dis_criterions=[dis_fake_criterion, dis_real_criterion],
               gen_optimizer=gen_optimizer,
               dis_optimizer=dis_optimizer,
+              supervised_coeff=supervised_coeff,
               gan_loss_coeff=gan_coeff,
               start_epoch=start_epoch,
               epochs=epochs,
@@ -203,4 +218,6 @@ if __name__ == "__main__":
               max_images=max_images_log,
               every_n=every_n,
               best_metric=best_metric,
-              save_name=save_name)
+              save_name=save_name,
+              inference_loader=inference_loader,
+              inference_save_path=inference_save_path)

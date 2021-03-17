@@ -8,6 +8,7 @@ from tqdm import tqdm
 from scripts.validation import validate
 from progressbar import progressbar
 from settings import *
+from scripts.inference import inference
 
 
 def train_gan(generator: nn.Module,
@@ -17,6 +18,7 @@ def train_gan(generator: nn.Module,
               dis_criterions,
               gen_optimizer: optim.Optimizer,
               dis_optimizer: optim.Optimizer,
+              supervised_coeff: float,
               gan_loss_coeff: float,
               start_epoch: int,
               epochs: int,
@@ -33,7 +35,9 @@ def train_gan(generator: nn.Module,
               max_images=0,
               every_n: int = 1,
               best_metric=-1,
-              save_name: str = ""):
+              save_name: str = "",
+              inference_loader: DataLoader = None,
+              inference_save_path: str = None):
     minibatch_number = len(train_loader) * start_epoch // every_n
     dis_fake_criterion, dis_real_criterion = dis_criterions
 
@@ -97,12 +101,13 @@ def train_gan(generator: nn.Module,
             concat_hr = torch.cat((hr_images, scaled_lr_images), 1).to(DEVICE)
 
             discriminator.requires_grad(False)
+
             # Calculate supervised loss and total generator loss.
-            supervised_loss = supervised_criterion(sr_images, hr_images)
+            supervised_loss = supervised_coeff * supervised_criterion(sr_images, hr_images)
             dis_out = discriminator(concat_outputs)
             dis_hr = discriminator(concat_hr)
-            gen_loss = gen_criterion(dis_out, dis_hr)
-            generator_total_loss = supervised_loss + gan_loss_coeff * gen_loss
+            gen_loss = gan_loss_coeff * gen_criterion(dis_out, dis_hr)
+            generator_total_loss = supervised_loss + gen_loss
 
             # Update cumulative losses counts.
             running_super_loss += supervised_loss.item()
@@ -171,3 +176,6 @@ def train_gan(generator: nn.Module,
             elif metric[0] > best_metric:
                 best_metric = metric[0]
                 torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
+
+            if inference_loader is not None:
+                inference(generator, epoch, inference_loader, inference_save_path)
