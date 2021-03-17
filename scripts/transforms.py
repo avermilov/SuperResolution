@@ -2,6 +2,7 @@ import os
 from random import choice
 from typing import List
 
+import PIL
 import scipy.io as sio
 import torch
 import torch.nn.functional as F
@@ -23,11 +24,17 @@ valid_noises = None
 train_crop_transform = None
 valid_crop_transform = None
 
+train_bicubic = None
+valid_bicubic = None
+
 
 def load_kernels(kernels_path: str):
     global train_kernels, valid_kernels
-    kernels = []
 
+    if kernels_path.lower() == "none":
+        return
+
+    kernels = []
     for filename in os.listdir(kernels_path):
         mat = sio.loadmat(os.path.join(kernels_path, filename))["Kernel"]
         mat = torch.from_numpy(mat)
@@ -47,6 +54,10 @@ def load_kernels(kernels_path: str):
 
 def load_noises(noises_path: str) -> None:
     global train_noises, valid_noises
+
+    if noises_path == "none":
+        return
+
     noises_transforms = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
@@ -84,9 +95,13 @@ def apply_kernel(images: torch.tensor, kernels_list: List[torch.tensor]):
 def train_lr_transform(images: torch.tensor):
     images = torch.clamp((images + 1) / 2, min=0, max=1)
 
-    images = apply_kernel(images, train_kernels)
+    if train_kernels is not None:
+        images = apply_kernel(images, train_kernels)
+    else:
+        images = train_bicubic(images)
 
-    images = inject_noise(images, train_noises, train_crop_transform)
+    if train_noises is not None:
+        images = inject_noise(images, train_noises, train_crop_transform)
 
     images = torch.clamp((images - 0.5) / 0.5, min=-1, max=1)
 
@@ -94,17 +109,22 @@ def train_lr_transform(images: torch.tensor):
 
 
 def get_train_lr_transform(scale: int, hr_crop: int):
-    global train_crop_transform
+    global train_crop_transform, train_bicubic
     train_crop_transform = transforms.RandomCrop(hr_crop // scale)
+    train_bicubic = transforms.Resize(hr_crop // scale, interpolation=PIL.Image.BICUBIC)
     return lambda x: train_lr_transform(x)
 
 
 def validation_lr_transform(images: torch.tensor):
     images = torch.clamp((images + 1) / 2, min=0, max=1)
 
-    images = apply_kernel(images, valid_kernels)
+    if valid_kernels is not None:
+        images = apply_kernel(images, valid_kernels)
+    else:
+        images = valid_bicubic(images)
 
-    images = inject_noise(images, valid_noises, valid_crop_transform)
+    if valid_noises is not None:
+        images = inject_noise(images, valid_noises, valid_crop_transform)
 
     images = torch.clamp((images - 0.5) / 0.5, min=-1, max=1)
 
@@ -112,6 +132,7 @@ def validation_lr_transform(images: torch.tensor):
 
 
 def get_validation_lr_transform(scale: int, hr_crop: int):
-    global valid_crop_transform
+    global valid_crop_transform, valid_bicubic
     valid_crop_transform = transforms.RandomCrop(hr_crop // scale)
+    valid_bicubic = transforms.Resize(hr_crop // scale, interpolation=PIL.Image.BICUBIC)
     return lambda x: validation_lr_transform(x)
