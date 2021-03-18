@@ -23,7 +23,7 @@ if __name__ == "__main__":
     # Required arguments in the JSON file.
     REQ_ARGUMENTS = ["tr_path", "val_path", "epochs", "generator_lr", "discriminator_lr",
                      "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
-                     "num_workers", "max_images_log", "gan_coeff", "every_n",
+                     "num_workers", "max_images_log", "gan_coeff",
                      "discriminator_type", "generator_type", "supervised_loss_type", "save_name",
                      "metrics", "ker_path", "noises_path", "supervised_coeff"]
 
@@ -170,13 +170,16 @@ if __name__ == "__main__":
     # Initialize datasets and data loaders.
     train_ds = torchvision.datasets.ImageFolder(tr_path, transform=train_transform)
     validation_ds = torchvision.datasets.ImageFolder(val_path, transform=validation_dataset_transform)
-    inference_ds = torchvision.datasets.ImageFolder(inference_path, transform=inference_dataset_transform)
 
     train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True,
                               num_workers=num_workers, worker_init_fn=worker_init_fn)
     validation_loader = DataLoader(validation_ds, batch_size=validation_batch_size,
                                    shuffle=False, num_workers=num_workers)
-    inference_loader = DataLoader(inference_ds, batch_size=1, shuffle=False)
+
+    inference_loader = None
+    if inference_path is not None:
+        inference_ds = torchvision.datasets.ImageFolder(inference_path, transform=inference_dataset_transform)
+        inference_loader = DataLoader(inference_ds, batch_size=1, shuffle=False)
 
     sw = SummaryWriter()
 

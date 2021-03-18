@@ -40,6 +40,9 @@ def train_gan(generator: nn.Module,
 
     save_every = best_metric == "every"
 
+    discriminator_loss = 0.4
+    stepper_active = False
+
     total_images = len(train_loader.dataset)
     total_minibatches = len(train_loader)
     for epoch in range(start_epoch, epochs):
@@ -112,7 +115,14 @@ def train_gan(generator: nn.Module,
             running_gen_loss += gen_loss.item()
             running_gen_total_loss += generator_total_loss.item()
 
-            discriminator.requires_grad(True)
+            if not stepper_active and discriminator_loss < 0.3:
+                stepper_active = True
+            elif stepper_active and discriminator_loss > 0.4:
+                stepper_active = False
+
+            if not stepper_active:
+                discriminator.requires_grad(True)
+
             concat_outputs = concat_outputs.detach()
 
             # Calculate discriminator loss.
@@ -128,10 +138,11 @@ def train_gan(generator: nn.Module,
             running_dis_total_loss += discriminator_loss.item()
 
             generator_total_loss.backward()
-            discriminator_loss.backward()
-
             gen_optimizer.step()
-            dis_optimizer.step()
+
+            if not stepper_active:
+                discriminator_loss.backward()
+                dis_optimizer.step()
 
             pbar.update(hr_images.shape[0])
         pbar.close()
