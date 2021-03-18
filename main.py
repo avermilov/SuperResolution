@@ -66,7 +66,6 @@ if __name__ == "__main__":
     num_workers = data["num_workers"]
     max_images_log = data["max_images_log"]
     gan_coeff = data["gan_coeff"]
-    every_n = data["every_n"]
     discriminator_type = data["discriminator_type"]
     generator_type = data["generator_type"]
     supervised_loss_type = data["supervised_loss_type"]
@@ -85,10 +84,6 @@ if __name__ == "__main__":
     generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
     discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
     inference_path = data["inference_source"] if "inference_source" in data else None
-    inference_save_path = data["inference_save_path"] if "inference_save_path" in data else None
-
-    if inference_path and not inference_save_path or not inference_path and inference_save_path:
-        raise ValueError("Must provide both inference source and inference save path.")
 
     # Raise error if no metrics were passed
     if not metrics_names:
@@ -216,8 +211,6 @@ if __name__ == "__main__":
               dis_warmup=discriminator_warmup,
               summary_writer=sw,
               max_images=max_images_log,
-              every_n=every_n,
               best_metric=best_metric,
               save_name=save_name,
-              inference_loader=inference_loader,
-              inference_save_path=inference_save_path)
+              inference_loader=inference_loader)

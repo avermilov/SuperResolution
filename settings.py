@@ -3,6 +3,8 @@ import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 CHECKPOINTS_PATH = "Checkpoints/"
+VALIDATION_PATH = "Validation/"
+INFERENCE_PATH = "Inference/"
 LOSSES_PATH_NAME = "SR Losses/"
 LEARNING_RATE_NAME = "SR Learning Rate"
 

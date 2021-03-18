@@ -33,16 +33,15 @@ def train_gan(generator: nn.Module,
               dis_warmup: List[float] = None,
               summary_writer: SummaryWriter = None,
               max_images=0,
-              every_n: int = 1,
               best_metric=-1,
               save_name: str = "",
-              inference_loader: DataLoader = None,
-              inference_save_path: str = None):
-    minibatch_number = len(train_loader) * start_epoch // every_n
+              inference_loader: DataLoader = None):
     dis_fake_criterion, dis_real_criterion = dis_criterions
 
     save_every = best_metric == "every"
 
+    total_images = len(train_loader.dataset)
+    total_minibatches = len(train_loader)
     for epoch in range(start_epoch, epochs):
         # If scheduler was passed, change lr to the one specified at each epoch.
         if gen_scheduler:
@@ -62,7 +61,6 @@ def train_gan(generator: nn.Module,
         running_dis_total_loss = 0
         running_super_loss = 0
         running_gen_total_loss = 0
-        total_images = 0
 
         pbar = tqdm(total=len(train_loader.dataset))
         for i, hr_images in enumerate(train_loader):
@@ -135,23 +133,6 @@ def train_gan(generator: nn.Module,
             gen_optimizer.step()
             dis_optimizer.step()
 
-            # Update learning rate and loss to logging
-            if summary_writer:
-                if (i + 1) % every_n == 0:
-                    summary_writer.add_scalar(GENERATOR_LOSS_NAME, running_gen_loss / total_images,
-                                              global_step=minibatch_number)
-                    summary_writer.add_scalar(DISCRIMINATOR_TOTAL_LOSS_NAME, running_dis_total_loss / total_images,
-                                              global_step=minibatch_number)
-                    summary_writer.add_scalar(DISCRIMINATOR_FAKE_LOSS_NAME, running_dis_fake_loss / total_images,
-                                              global_step=minibatch_number)
-                    summary_writer.add_scalar(DISCRIMINATOR_REAL_LOSS_NAME, running_dis_real_loss / total_images,
-                                              global_step=minibatch_number)
-                    summary_writer.add_scalar(SUPERVISED_LOSS_NAME, running_super_loss / total_images,
-                                              global_step=minibatch_number)
-                    summary_writer.add_scalar(GENERATOR_TOTAL_LOSS_NAME, running_gen_total_loss / total_images,
-                                              global_step=minibatch_number)
-                    minibatch_number += 1
-
             pbar.update(hr_images.shape[0])
         pbar.close()
 
@@ -159,6 +140,19 @@ def train_gan(generator: nn.Module,
             learning_rate = next(iter(gen_optimizer.param_groups))["lr"]
             summary_writer.add_scalar(LEARNING_RATE_NAME, learning_rate,
                                       global_step=epoch)
+            summary_writer.add_scalar(GENERATOR_LOSS_NAME, running_gen_loss / total_minibatches,
+                                      global_step=epoch)
+            summary_writer.add_scalar(DISCRIMINATOR_TOTAL_LOSS_NAME, running_dis_total_loss / total_minibatches,
+                                      global_step=epoch)
+            summary_writer.add_scalar(DISCRIMINATOR_FAKE_LOSS_NAME, running_dis_fake_loss / total_minibatches,
+                                      global_step=epoch)
+            summary_writer.add_scalar(DISCRIMINATOR_REAL_LOSS_NAME, running_dis_real_loss / total_minibatches,
+                                      global_step=epoch)
+            summary_writer.add_scalar(SUPERVISED_LOSS_NAME, running_super_loss / total_minibatches,
+                                      global_step=epoch)
+            summary_writer.add_scalar(GENERATOR_TOTAL_LOSS_NAME, running_gen_total_loss / total_minibatches,
+                                      global_step=epoch)
+
         # Validate model
         with torch.no_grad():
             metric = validate(generator, metrics, validation_loader,
@@ -178,4 +172,4 @@ def train_gan(generator: nn.Module,
                 torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
 
             if inference_loader is not None:
-                inference(generator, epoch, inference_loader, inference_save_path)
+                inference(generator, epoch, inference_loader, summary_writer)
