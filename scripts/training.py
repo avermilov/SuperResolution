@@ -1,14 +1,15 @@
+from typing import List
+
+import torch.nn.functional as F
 from torch import nn, optim
 from torch.utils.data import DataLoader
-from typing import List
-import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from tqdm import tqdm
-from scripts.validation import validate
-from progressbar import progressbar
-from settings import *
+
 from scripts.inference import inference
+from scripts.validation import validate
+from settings import *
 
 
 def train_gan(generator: nn.Module,
@@ -43,7 +44,6 @@ def train_gan(generator: nn.Module,
     discriminator_loss = 0.4
     stepper_active = False
 
-    total_images = len(train_loader.dataset)
     total_minibatches = len(train_loader)
     for epoch in range(start_epoch, epochs):
         # If scheduler was passed, change lr to the one specified at each epoch.
@@ -85,9 +85,6 @@ def train_gan(generator: nn.Module,
             hr_images = hr_images[0]
             lr_images = lr_transform(hr_images)
             lr_images, hr_images = lr_images.to(DEVICE), hr_images.to(DEVICE)
-
-            # Update cumulatively iterated over images count.
-            total_images += hr_images.shape[0]
 
             # Zero the optimizers
             gen_optimizer.zero_grad()
