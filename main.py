@@ -120,7 +120,7 @@ if __name__ == "__main__":
     # Load noises and kernels
     # todo: use 4x kernels
     load_noises(noises_path)
-    load_kernels(kernels_path)
+    load_kernels(kernels_path, scale)
 
     # Raise error if no metrics were passed
     if not metrics_names:

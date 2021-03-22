@@ -27,12 +27,17 @@ valid_crop_transform = None
 train_bicubic = None
 valid_bicubic = None
 
+# Scale parameter.
+SCALE = None
 
-def load_kernels(kernels_path: str):
-    global train_kernels, valid_kernels
+
+def load_kernels(kernels_path: str, scale: int) -> None:
+    global train_kernels, valid_kernels, SCALE
 
     if kernels_path is None:
         return
+
+    SCALE = scale
 
     kernels = []
     for filename in os.listdir(kernels_path):
@@ -41,6 +46,7 @@ def load_kernels(kernels_path: str):
         mat.requires_grad = False
         mat = torch.unsqueeze(mat, dim=0)
         mat = torch.unsqueeze(mat, dim=0)
+        mat = mat.type(torch.FloatTensor)
         kernels.append(mat)
 
     KERNEL_TRAIN_SIZE = int(TRAIN_PERCENTAGE * len(kernels))
@@ -84,7 +90,7 @@ def apply_kernel(images: torch.tensor, kernels_list: List[torch.tensor]):
     padding = (kernel.shape[-1] - 1) // 2
     images = F.pad(images, [padding] * 4, mode="reflect")
     downscaled = torch.cat([
-        F.conv2d(images[:, i:i + 1, :, :], kernel, stride=2)
+        F.conv2d(images[:, i:i + 1, :, :], kernel, stride=SCALE)
         for i in range(images.shape[1])],
         dim=1
     )
