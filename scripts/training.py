@@ -31,18 +31,23 @@ def train_gan(scale: int,
               validation_transform: transforms.Compose,
               gen_scheduler: List[float] = None,
               dis_scheduler: List[float] = None,
-              gen_warmup: List[float] = None,
-              dis_warmup: List[float] = None,
               summary_writer: SummaryWriter = None,
               max_images=0,
               best_metric=-1,
               save_name: str = "",
-              inference_loader: DataLoader = None):
+              inference_loader: DataLoader = None,
+              stepper=None):
     dis_fake_criterion, dis_real_criterion = dis_criterions
 
     save_every = best_metric == "every"
+    if best_metric == "none":
+        best_metric = -10 ** 9
 
-    discriminator_loss = 0.4
+    use_stepper = stepper is not None
+    if use_stepper:
+        discriminator_loss = 1
+        stepper_off_treshold = stepper["off_threshold"]
+        stepper_on_threshold = stepper["on_threshold"]
     stepper_active = False
 
     total_minibatches = len(train_loader)
@@ -68,20 +73,6 @@ def train_gan(scale: int,
 
         pbar = tqdm(total=len(train_loader.dataset))
         for i, hr_images in enumerate(train_loader):
-            # If warmup was passed, apply to mini_batch ONLY during the first epoch.
-            if gen_warmup:
-                if i < len(gen_warmup):
-                    for g in gen_optimizer.param_groups:
-                        g["lr"] = gen_warmup[i]
-                else:
-                    gen_warmup = None
-            if dis_warmup:
-                if i < len(dis_warmup):
-                    for g in dis_optimizer.param_groups:
-                        g["lr"] = dis_warmup[i]
-                else:
-                    dis_warmup = None
-
             # Get proper hr minibatch and lr minibatch.
             hr_images = hr_images[0]
             lr_images = lr_transform(hr_images)
@@ -113,12 +104,13 @@ def train_gan(scale: int,
             running_gen_loss += gen_loss.item()
             running_gen_total_loss += generator_total_loss.item()
 
-            if not stepper_active and discriminator_loss < 0.3:
-                stepper_active = True
-            elif stepper_active and discriminator_loss > 0.4:
-                stepper_active = False
+            if use_stepper:
+                if not stepper_active and discriminator_loss < stepper_off_treshold:
+                    stepper_active = True
+                elif stepper_active and discriminator_loss > stepper_on_threshold:
+                    stepper_active = False
 
-            if not stepper_active:
+            if not stepper_active or not use_stepper:
                 discriminator.requires_grad(True)
 
             concat_outputs = concat_outputs.detach()
@@ -138,7 +130,7 @@ def train_gan(scale: int,
             generator_total_loss.backward()
             gen_optimizer.step()
 
-            if not stepper_active:
+            if not stepper_active or not use_stepper:
                 discriminator_loss.backward()
                 dis_optimizer.step()
 

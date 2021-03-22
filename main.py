@@ -4,6 +4,7 @@ import json
 import lpips
 import torch
 import torchvision
+from torch import nn
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
@@ -18,11 +19,7 @@ from settings import DEVICE
 
 if __name__ == "__main__":
     # Required arguments in the JSON file.
-    REQ_ARGUMENTS = ["tr_path", "val_path", "epochs", "generator_lr", "discriminator_lr",
-                     "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
-                     "num_workers", "max_images_log", "gan_coeff",
-                     "discriminator_type", "generator_type", "supervised_loss_type", "save_name",
-                     "metrics", "ker_path", "noises_path", "supervised_coeff", "scale"]
+    REQ_ARGUMENTS = ["scale", "paths", "generator", "discriminator", "loaders", "loss", "logging"]
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
@@ -51,74 +48,133 @@ if __name__ == "__main__":
         raise ValueError(f"Some required arguments were not passed: {missing_req}")
 
     # Assign required arguments.
-    tr_path = data["tr_path"]
-    val_path = data["val_path"]
-    epochs = data["epochs"]
-    generator_lr_dict = data["generator_lr"]
-    discriminator_lr = data["discriminator_lr"]
-    train_batch_size = data["train_batch_size"]
-    validation_batch_size = data["validation_batch_size"]
-    train_crop = data["train_crop"]
-    validation_crop = data["validation_crop"]
-    num_workers = data["num_workers"]
-    max_images_log = data["max_images_log"]
-    gan_coeff = data["gan_coeff"]
-    discriminator_type = data["discriminator_type"]
-    generator_type = data["generator_type"]
-    supervised_loss_type = data["supervised_loss_type"]
-    save_name = data["save_name"]
-    metrics_names = data["metrics"]
-    ker_path = data["ker_path"]
-    noises_path = data["noises_path"]
-    supervised_coeff = data["supervised_coeff"]
     scale = data["scale"]
+    # Check for x2 or x4 scale
+    if scale != 2 and scale != 4:
+        raise ValueError("Scale can only be 2 or 4.")
+
+    epochs = data["epochs"]
+    if epochs <= 0:
+        raise ValueError("Epochs must be a positive integer.")
+
+    paths_dict = data["paths"]
+    kernels_path = paths_dict["kernels_path"]
+    if kernels_path.lower() == "none":
+        kernels_path = None
+    noises_path = paths_dict["noises_path"]
+    if noises_path.lower() == "none":
+        noises_path = None
+    tr_path = paths_dict["train_path"]
+    valid_path = paths_dict["validation_path"]
+    inference_source_path = paths_dict["inference_source_path"]
+    if inference_source_path == "none":
+        inference_source_path = None
+    inference_results_path = paths_dict["inference_results_path"]
+    if inference_results_path == "none":
+        inference_results_path = None
+    if inference_results_path is None and inference_source_path is not None \
+            or inference_results_path is not None and inference_source_path is None:
+        raise ValueError("Must pass both inference source and result paths or none.")
+
+    generator_dict = data["generator"]
+    generator_type = generator_dict["type"]
+    generator_lr = generator_dict["learning_rate"]
+
+    discriminator_dict = data["discriminator"]
+    discriminator_type = discriminator_dict["type"]
+    discriminator_lr = discriminator_dict["learning_rate"]
+
+    loaders_dict = data["loaders"]
+    train_crop = loaders_dict["train_crop"]
+    validation_crop = loaders_dict["validation_crop"]
+    train_batch_size = loaders_dict["train_batch_size"]
+    validation_batch_size = loaders_dict["validation_batch_size"]
+    num_workers = loaders_dict["num_workers"]
+    inference_batch_size = loaders_dict["inference_batch_size"]
+    if inference_batch_size == "none":
+        inference_batch_size = None
+    if inference_batch_size is None and inference_source_path is not None:
+        raise ValueError("Must pass inference_batch_size if inference paths are specified.")
+
+    loss_dict = data["loss"]
+    loss_type = loss_dict["type"]
+    supervised_coeff = loss_dict["supervised_coeff"]
+    generator_coeff = loss_dict["generator_coeff"]
+    if loss_type == "VGGPerceptual":
+        if "l1_coeff" not in loss_dict or "vgg_coeff" not in loss_dict:
+            raise ValueError("VGGPerceptual loss must specify L1 and VGG coefficients.")
+        l1_coeff = loss_dict["l1_coeff"]
+        vgg_coeff = loss_dict["vgg_coeff"]
+    stepper = loss_dict["stepper"]
+    if stepper == "none":
+        stepper = []
+
+    logging_dict = data["logging"]
+    max_images = logging_dict["max_images"]
+    save_prefix = logging_dict["save_prefix"]
+    best_metric = logging_dict["best_metric"]
+    if best_metric == "none":
+        best_metric = None
+    metrics_names = logging_dict["metrics"]
 
     # Load noises and kernels
     # todo: use 4x kernels
     load_noises(noises_path)
-    load_kernels(ker_path)
-
-    # Optional parameters
-    best_metric = data["best_metric"] if "best_metric" in data else -1
-    generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
-    discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
-    inference_path = data["inference_source"] if "inference_source" in data else None
-
-    # Check for x2 or x4 scale
-    if scale != 2 and scale != 4:
-        raise ValueError("Scale can only be 2 or 4.")
+    load_kernels(kernels_path)
 
     # Raise error if no metrics were passed
     if not metrics_names:
         raise ValueError("No validation metrics passed.")
 
-    # Convert generator lr to proper list if dict was passed
-    generator_lr = generator_lr_dict
-    if isinstance(generator_lr_dict, dict):
-        generator_lr = []
-        for lr, count in generator_lr_dict.items():
-            generator_lr += [float(lr)] * count
+    # Convert generator lr to proper list if dict or float was passed
+    gen_lr = None
+    if isinstance(generator_lr, dict):
+        gen_lr = []
+        total_count = 0
+        for lr, count in generator_lr.items():
+            gen_lr += [float(lr)] * count
+            total_count += count
+        if total_count != epochs:
+            raise ValueError("Epochs and generator scheduler size must be equal.")
+    elif isinstance(generator_lr, float):
+        gen_lr = [generator_lr] * epochs
+
+    # Convert discriminator lr to proper list if dict or float was passed
+    dis_lr = None
+    if isinstance(discriminator_lr, dict):
+        dis_lr = []
+        total_count = 0
+        for lr, count in discriminator_lr.items():
+            dis_lr += [float(lr)] * count
+            total_count += count
+        if total_count != epochs:
+            raise ValueError("Epochs and discriminator scheduler size must be equal.")
+    elif isinstance(discriminator_lr, float):
+        dis_lr = [discriminator_lr] * epochs
 
     # Use specified supervised_criterion
     supervised_criterion = None
-    if supervised_loss_type == "VGGPerceptual":
-        if "l1_coeff" not in data or "vgg_coeff" not in data:
-            raise ValueError("Not all VGGPerceptual parameters were given.")
-        supervised_criterion = VGGPerceptual(l1_coeff=data["l1_coeff"], vgg_coeff=data["vgg_coeff"])
+    if loss_type == "VGGPerceptual":
+        supervised_criterion = VGGPerceptual(l1_coeff=l1_coeff, vgg_coeff=vgg_coeff)
+    elif loss_type == "L1":
+        supervised_criterion = nn.L1Loss()
+    elif loss_type == "VGG":
+        supervised_criterion = VGGPerceptual(l1_coeff=0, vgg_coeff=1)
 
     # Use specified discriminator
     discriminator = None
     if discriminator_type == "ConvDis":
-        if "num_discriminator_features" not in data or "num_deep_layers" not in data:
+        if "num_discriminator_features" not in discriminator_dict or \
+                "num_deep_layers" not in discriminator_dict:
             raise ValueError("Not all ConvDiscriminator parameters were given.")
+        num_features = discriminator_dict["num_discriminator_features"]
+        num_deep_layers = discriminator_dict["num_deep_layers"].to(DEVICE)
         discriminator = conv_discriminator.ConvDiscriminator(num_channels=6,
-                                                             num_features=data["num_discriminator_features"],
-                                                             num_deep_layers=data["num_deep_layers"]).to(DEVICE)
+                                                             num_features=num_features,
+                                                             num_deep_layers=num_deep_layers)
     elif discriminator_type == "ESRDis":
         discriminator = esrgan_discriminator.Discriminator(num_channels=6).to(DEVICE)
-    dis_optimizer = torch.optim.Adam(discriminator.parameters(),
-                                     lr=discriminator_lr if isinstance(discriminator_lr, float) else
-                                     discriminator_lr[0], betas=(0.5, 0.999))
+    dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=dis_lr[0], betas=(0.5, 0.999))
 
     # Use specified generator
     generator = None
@@ -128,9 +184,7 @@ if __name__ == "__main__":
         generator = newer_esrgan_generator.esrgan16(scale, pretrained=False).to(DEVICE)
     elif generator_type == "ESRGen23":
         generator = newer_esrgan_generator.esrgan23(scale, pretrained=False).to(DEVICE)
-    gen_optimizer = torch.optim.Adam(generator.parameters(),
-                                     lr=generator_lr if isinstance(generator_lr, float) else
-                                     generator_lr[0], betas=(0.5, 0.999))
+    gen_optimizer = torch.optim.Adam(generator.parameters(), lr=gen_lr[0], betas=(0.5, 0.999))
 
     # Use specified metrics for validation
     metrics = dict()
@@ -174,7 +228,7 @@ if __name__ == "__main__":
 
     # Initialize datasets and data loaders.
     train_ds = torchvision.datasets.ImageFolder(tr_path, transform=train_transform)
-    validation_ds = torchvision.datasets.ImageFolder(val_path, transform=validation_dataset_transform)
+    validation_ds = torchvision.datasets.ImageFolder(valid_path, transform=validation_dataset_transform)
 
     train_loader = DataLoader(train_ds, batch_size=train_batch_size, shuffle=True,
                               num_workers=num_workers, worker_init_fn=worker_init_fn)
@@ -182,9 +236,10 @@ if __name__ == "__main__":
                                    shuffle=False, num_workers=num_workers)
 
     inference_loader = None
-    if inference_path is not None:
-        inference_ds = torchvision.datasets.ImageFolder(inference_path, transform=inference_dataset_transform)
-        inference_loader = DataLoader(inference_ds, batch_size=1, shuffle=False)
+    if inference_source_path is not None:
+        inference_ds = torchvision.datasets.ImageFolder(inference_source_path,
+                                                        transform=inference_dataset_transform)
+        inference_loader = DataLoader(inference_ds, batch_size=inference_batch_size, shuffle=False)
 
     sw = SummaryWriter()
 
@@ -206,7 +261,7 @@ if __name__ == "__main__":
               gen_optimizer=gen_optimizer,
               dis_optimizer=dis_optimizer,
               supervised_coeff=supervised_coeff,
-              gan_loss_coeff=gan_coeff,
+              gan_loss_coeff=generator_coeff,
               start_epoch=start_epoch,
               epochs=epochs,
               metrics=metrics,
@@ -214,12 +269,11 @@ if __name__ == "__main__":
               validation_loader=validation_loader,
               lr_transform=train_lr_transform,
               validation_transform=validation_lr_transform,
-              gen_scheduler=None if isinstance(generator_lr, float) else generator_lr,
-              dis_scheduler=None if isinstance(discriminator_lr, float) else discriminator_lr,
-              gen_warmup=generator_warmup,
-              dis_warmup=discriminator_warmup,
+              gen_scheduler=gen_lr,
+              dis_scheduler=dis_lr,
               summary_writer=sw,
-              max_images=max_images_log,
+              max_images=max_images,
               best_metric=best_metric,
-              save_name=save_name,
-              inference_loader=inference_loader)
+              save_name=save_prefix,
+              inference_loader=inference_loader,
+              stepper=stepper)

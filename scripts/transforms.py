@@ -31,7 +31,7 @@ valid_bicubic = None
 def load_kernels(kernels_path: str):
     global train_kernels, valid_kernels
 
-    if kernels_path.lower() == "none":
+    if kernels_path is None:
         return
 
     kernels = []
@@ -55,7 +55,7 @@ def load_kernels(kernels_path: str):
 def load_noises(noises_path: str) -> None:
     global train_noises, valid_noises
 
-    if noises_path == "none":
+    if noises_path is None:
         return
 
     noises_transforms = transforms.Compose([
