@@ -12,7 +12,8 @@ from scripts.validation import validate
 from settings import *
 
 
-def train_gan(generator: nn.Module,
+def train_gan(scale: int,
+              generator: nn.Module,
               discriminator: nn.Module,
               supervised_criterion,
               gen_criterion,
@@ -94,7 +95,7 @@ def train_gan(generator: nn.Module,
             sr_images = generator(lr_images)
 
             # Get concatenated images for conditional GAN
-            scaled_lr_images = F.interpolate(lr_images, scale_factor=2, mode="bicubic", align_corners=True)
+            scaled_lr_images = F.interpolate(lr_images, scale_factor=scale, mode="bicubic", align_corners=True)
             concat_outputs = torch.cat((sr_images, scaled_lr_images), 1).to(DEVICE)
             concat_hr = torch.cat((hr_images, scaled_lr_images), 1).to(DEVICE)
 

@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
 from models.discriminators import conv_discriminator, esrgan_discriminator
-from models.generators import rdn, esrgan_generator
+from models.generators import rdn, newer_esrgan_generator
 from scripts.losses import LSGANDisFakeLoss, LSGANDisRealLoss, LSGANGenLoss, VGGPerceptual
 from scripts.metrics import PSNR, worker_init_fn, ssim
 from scripts.training import train_gan
@@ -17,15 +17,12 @@ from scripts.transforms import get_train_lr_transform, get_validation_lr_transfo
 from settings import DEVICE
 
 if __name__ == "__main__":
-    # Upscaling parameter
-    SCALE = 2
-
     # Required arguments in the JSON file.
     REQ_ARGUMENTS = ["tr_path", "val_path", "epochs", "generator_lr", "discriminator_lr",
                      "train_batch_size", "validation_batch_size", "train_crop", "validation_crop",
                      "num_workers", "max_images_log", "gan_coeff",
                      "discriminator_type", "generator_type", "supervised_loss_type", "save_name",
-                     "metrics", "ker_path", "noises_path", "supervised_coeff"]
+                     "metrics", "ker_path", "noises_path", "supervised_coeff", "scale"]
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
@@ -74,8 +71,10 @@ if __name__ == "__main__":
     ker_path = data["ker_path"]
     noises_path = data["noises_path"]
     supervised_coeff = data["supervised_coeff"]
+    scale = data["scale"]
 
     # Load noises and kernels
+    # todo: use 4x kernels
     load_noises(noises_path)
     load_kernels(ker_path)
 
@@ -84,6 +83,10 @@ if __name__ == "__main__":
     generator_warmup = data["generator_warmup"] if "generator_warmup" in data else None
     discriminator_warmup = data["discriminator_warmup"] if "discriminator_warmup" in data else None
     inference_path = data["inference_source"] if "inference_source" in data else None
+
+    # Check for x2 or x4 scale
+    if scale != 2 and scale != 4:
+        raise ValueError("Scale can only be 2 or 4.")
 
     # Raise error if no metrics were passed
     if not metrics_names:
@@ -120,9 +123,11 @@ if __name__ == "__main__":
     # Use specified generator
     generator = None
     if generator_type == "RDN":
-        generator = rdn.RDN(SCALE, 3, 64, 64, 16, 8).to(DEVICE)
-    elif generator_type == "ESRGen":
-        generator = esrgan_generator.esrgan16(pretrained=False).to(DEVICE)
+        generator = rdn.RDN(scale, 3, 64, 64, 16, 8).to(DEVICE)
+    elif generator_type == "ESRGen16":
+        generator = newer_esrgan_generator.esrgan16(scale, pretrained=False).to(DEVICE)
+    elif generator_type == "ESRGen23":
+        generator = newer_esrgan_generator.esrgan23(scale, pretrained=False).to(DEVICE)
     gen_optimizer = torch.optim.Adam(generator.parameters(),
                                      lr=generator_lr if isinstance(generator_lr, float) else
                                      generator_lr[0], betas=(0.5, 0.999))
@@ -149,7 +154,7 @@ if __name__ == "__main__":
         transforms.RandomCrop(train_crop, train_crop)
     ])
     # Tranform for getting low res image from high res one.
-    train_lr_transform = get_train_lr_transform(SCALE, train_crop)
+    train_lr_transform = get_train_lr_transform(scale, train_crop)
 
     # Tranform for converting image from validation ImageFolder to tensor.
     validation_dataset_transform = transforms.Compose([
@@ -159,7 +164,7 @@ if __name__ == "__main__":
     ])
 
     # Transform for getting low res image from high res one for validation.
-    validation_lr_transform = get_validation_lr_transform(SCALE, validation_crop)
+    validation_lr_transform = get_validation_lr_transform(scale, validation_crop)
 
     # Transform for converting image from inference ImageFolder to tensor.
     inference_dataset_transform = transforms.Compose([
@@ -192,7 +197,8 @@ if __name__ == "__main__":
         dis_optimizer.load_state_dict(checkpoint["dis_optimizer"])
         start_epoch = checkpoint["epoch"]
 
-    train_gan(generator=generator,
+    train_gan(scale=scale,
+              generator=generator,
               discriminator=discriminator,
               supervised_criterion=supervised_criterion,
               gen_criterion=gen_criterion,
