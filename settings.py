@@ -22,3 +22,8 @@ METRIC_NAMES = {
     "lpips_vgg": METRICS_PATH_NAME + "SR LPIPS VGG",
     "ssim": METRICS_PATH_NAME + "SR SSIM"
 }
+
+
+def set_device(new_device: str) -> None:
+    global DEVICE
+    DEVICE = new_device

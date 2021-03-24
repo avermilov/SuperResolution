@@ -1,184 +1,146 @@
-import torch
-from torch import nn
-import torchvision
 import math
+import torch
+import torch.nn as nn
+from torch.hub import load_state_dict_from_url
+
+model_urls = {
+    "srgan_2x2": "https://github.com/Lornatang/SRGAN-PyTorch/releases/download/0.1.0/SRGAN_2x2_DIV2K-40b1f27b.pth",
+    "srgan": "https://github.com/Lornatang/SRGAN-PyTorch/releases/download/0.1.0/SRGAN_DIV2K-625da87d.pth",
+    "srgan_8x8": "https://github.com/Lornatang/SRGAN-PyTorch/releases/download/0.1.0/SRGAN_8x8_DIV2K-6f732f6d.pth"
+}
 
 
-class ConvolutionalBlock(nn.Module):
-    """
-    A convolutional block, comprising convolutional, BN, activation layers.
-    """
+class Generator(nn.Module):
+    r"""The main architecture of the generator."""
 
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, batch_norm=False, activation=None):
+    def __init__(self, upscale_factor: int = 4) -> None:
+        """ PyTorch implementation SRGAN.
+        Args:
+            upscale_factor (int): How many times to enlarge the picture. (default: 4)
         """
-        :param in_channels: number of input channels
-        :param out_channels: number of output channe;s
-        :param kernel_size: kernel size
-        :param stride: stride
-        :param batch_norm: include a BN layer?
-        :param activation: Type of activation; None if none
+        super(Generator, self).__init__()
+        num_upsampling_block = int(math.log(upscale_factor, 2))
+        # First layer.
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=9, stride=1, padding=4),
+            nn.PReLU()
+        )
+
+        # 16 Residual blocks.
+        residual_blocks = []
+        for _ in range(16):
+            residual_blocks.append(ResidualBlock(64))
+        self.trunk = nn.Sequential(*residual_blocks)
+
+        # Second conv layer post residual blocks.
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.BatchNorm2d(64)
+        )
+
+        # 2 Upsampling layers.
+        upsampling = []
+        for _ in range(num_upsampling_block):
+            upsampling.append(UpsampleBlock(256))
+        self.upsampling = nn.Sequential(*upsampling)
+
+        # Final output layer.
+        self.conv3 = nn.Conv2d(64, 3, kernel_size=9, stride=1, padding=4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out1 = self.conv1(x)
+        out = self.trunk(out1)
+        out2 = self.conv2(out)
+        out = torch.add(out1, out2)
+        out = self.upsampling(out)
+        out = self.conv3(out)
+
+        return out
+
+
+class UpsampleBlock(nn.Module):
+    r"""Main upsample block structure"""
+
+    def __init__(self, channels: int = 256) -> None:
+        r"""Initializes internal Module state, shared by both nn.Module and ScriptModule.
+        Args:
+            channels (int): Number of channels in the input image. (default: 256)
         """
-        super(ConvolutionalBlock, self).__init__()
-
-        if activation is not None:
-            activation = activation.lower()
-            assert activation in {'prelu', 'leakyrelu', 'tanh'}
-
-        # A container that will hold the layers in this convolutional block
-        layers = list()
-
-        # A convolutional layer
-        layers.append(
-            nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride,
-                      padding=kernel_size // 2))
-
-        # A batch normalization (BN) layer, if wanted
-        if batch_norm is True:
-            layers.append(nn.BatchNorm2d(num_features=out_channels))
-
-        # An activation layer, if wanted
-        if activation == 'prelu':
-            layers.append(nn.PReLU())
-        elif activation == 'leakyrelu':
-            layers.append(nn.LeakyReLU(0.2))
-        elif activation == 'tanh':
-            layers.append(nn.Tanh())
-
-        # Put together the convolutional block as a sequence of the layers in this container
-        self.conv_block = nn.Sequential(*layers)
-
-    def forward(self, input):
-        """
-        Forward propagation.
-        :param input: input images, a tensor of size (N, in_channels, w, h)
-        :return: output images, a tensor of size (N, out_channels, w, h)
-        """
-        output = self.conv_block(input)  # (N, out_channels, w, h)
-
-        return output
-
-
-class SubPixelConvolutionalBlock(nn.Module):
-    """
-    A subpixel convolutional block, comprising convolutional, pixel-shuffle, and PReLU activation layers.
-    """
-
-    def __init__(self, kernel_size=3, n_channels=64, scaling_factor=2):
-        """
-        :param kernel_size: kernel size of the convolution
-        :param n_channels: number of input and output channels
-        :param scaling_factor: factor to scale input images by (along both dimensions)
-        """
-        super(SubPixelConvolutionalBlock, self).__init__()
-
-        # A convolutional layer that increases the number of channels by scaling factor^2, followed by pixel shuffle and PReLU
-        self.conv = nn.Conv2d(in_channels=n_channels, out_channels=n_channels * (scaling_factor ** 2),
-                              kernel_size=kernel_size, padding=kernel_size // 2)
-        # These additional channels are shuffled to form additional pixels, upscaling each dimension by the scaling factor
-        self.pixel_shuffle = nn.PixelShuffle(upscale_factor=scaling_factor)
+        super(UpsampleBlock, self).__init__()
+        self.conv = nn.Conv2d(channels // 4, channels, kernel_size=3, stride=1, padding=1)
+        self.pixel_shuffle = nn.PixelShuffle(upscale_factor=2)
         self.prelu = nn.PReLU()
 
-    def forward(self, input):
-        """
-        Forward propagation.
-        :param input: input images, a tensor of size (N, n_channels, w, h)
-        :return: scaled output images, a tensor of size (N, n_channels, w * scaling factor, h * scaling factor)
-        """
-        output = self.conv(input)  # (N, n_channels * scaling factor^2, w, h)
-        output = self.pixel_shuffle(output)  # (N, n_channels, w * scaling factor, h * scaling factor)
-        output = self.prelu(output)  # (N, n_channels, w * scaling factor, h * scaling factor)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.conv(x)
+        out = self.pixel_shuffle(out)
+        out = self.prelu(out)
 
-        return output
+        return out
 
 
 class ResidualBlock(nn.Module):
-    """
-    A residual block, comprising two convolutional blocks with a residual connection across them.
-    """
+    r"""Main residual block structure"""
 
-    def __init__(self, kernel_size=3, n_channels=64):
-        """
-        :param kernel_size: kernel size
-        :param n_channels: number of input and output channels (same because the input must be added to the output)
+    def __init__(self, channels: int = 64) -> None:
+        r"""Initializes internal Module state, shared by both nn.Module and ScriptModule.
+        Args:
+            channels (int): Number of channels in the input image. (default: 64)
         """
         super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(channels)
+        self.prelu = nn.PReLU()
+        self.conv2 = nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(channels)
 
-        # The first convolutional block
-        self.conv_block1 = ConvolutionalBlock(in_channels=n_channels, out_channels=n_channels, kernel_size=kernel_size,
-                                              batch_norm=True, activation='PReLu')
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.prelu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
 
-        # The second convolutional block
-        self.conv_block2 = ConvolutionalBlock(in_channels=n_channels, out_channels=n_channels, kernel_size=kernel_size,
-                                              batch_norm=True, activation=None)
+        out = torch.add(out, x)
 
-    def forward(self, input):
-        """
-        Forward propagation.
-        :param input: input images, a tensor of size (N, n_channels, w, h)
-        :return: output images, a tensor of size (N, n_channels, w, h)
-        """
-        residual = input  # (N, n_channels, w, h)
-        output = self.conv_block1(input)  # (N, n_channels, w, h)
-        output = self.conv_block2(output)  # (N, n_channels, w, h)
-        output = output + residual  # (N, n_channels, w, h)
-
-        return output
+        return out
 
 
-class SRResNet(nn.Module):
+def _gan(arch: str, upscale_factor: int, pretrained: bool, progress: bool) -> Generator:
+    model = Generator(upscale_factor)
+    if pretrained:
+        state_dict = load_state_dict_from_url(model_urls[arch],
+                                              progress=progress,
+                                              map_location=torch.device("cpu"))
+        model.load_state_dict(state_dict)
+    return model
+
+
+def srgan_2x2(pretrained: bool = False, progress: bool = True) -> Generator:
+    r"""GAN model architecture from the
+    `"One weird trick..." <https://arxiv.org/abs/1609.04802>`_ paper.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
-    The SRResNet, as defined in the paper.
+    return _gan("srgan_2x2", 2, pretrained, progress)
+
+
+def srgan(pretrained: bool = False, progress: bool = True) -> Generator:
+    r"""GAN model architecture from the
+    `"One weird trick..." <https://arxiv.org/abs/1609.04802>`_ paper.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
     """
+    return _gan("srgan", 4, pretrained, progress)
 
-    def __init__(self, large_kernel_size=9, small_kernel_size=3, n_channels=64, n_blocks=16, scaling_factor=4):
-        """
-        :param large_kernel_size: kernel size of the first and last convolutions which transform the inputs and outputs
-        :param small_kernel_size: kernel size of all convolutions in-between, i.e. those in the residual and subpixel convolutional blocks
-        :param n_channels: number of channels in-between, i.e. the input and output channels for the residual and subpixel convolutional blocks
-        :param n_blocks: number of residual blocks
-        :param scaling_factor: factor to scale input images by (along both dimensions) in the subpixel convolutional block
-        """
-        super(SRResNet, self).__init__()
 
-        # Scaling factor must be 2, 4, or 8
-        scaling_factor = int(scaling_factor)
-        assert scaling_factor in {2, 4, 8}, "The scaling factor must be 2, 4, or 8!"
-
-        # The first convolutional block
-        self.conv_block1 = ConvolutionalBlock(in_channels=3, out_channels=n_channels, kernel_size=large_kernel_size,
-                                              batch_norm=False, activation='PReLu')
-
-        # A sequence of n_blocks residual blocks, each containing a skip-connection across the block
-        self.residual_blocks = nn.Sequential(
-            *[ResidualBlock(kernel_size=small_kernel_size, n_channels=n_channels) for i in range(n_blocks)])
-
-        # Another convolutional block
-        self.conv_block2 = ConvolutionalBlock(in_channels=n_channels, out_channels=n_channels,
-                                              kernel_size=small_kernel_size,
-                                              batch_norm=True, activation=None)
-
-        # Upscaling is done by sub-pixel convolution, with each such block upscaling by a factor of 2
-        n_subpixel_convolution_blocks = int(math.log2(scaling_factor))
-        self.subpixel_convolutional_blocks = nn.Sequential(
-            *[SubPixelConvolutionalBlock(kernel_size=small_kernel_size, n_channels=n_channels, scaling_factor=2) for i
-              in range(n_subpixel_convolution_blocks)])
-
-        # The last convolutional block
-        self.conv_block3 = ConvolutionalBlock(in_channels=n_channels, out_channels=3, kernel_size=large_kernel_size,
-                                              batch_norm=False, activation='Tanh')
-
-    def forward(self, lr_imgs):
-        """
-        Forward prop.
-        :param lr_imgs: low-resolution input images, a tensor of size (N, 3, w, h)
-        :return: super-resolution output images, a tensor of size (N, 3, w * scaling factor, h * scaling factor)
-        """
-        output = self.conv_block1(lr_imgs)  # (N, 3, w, h)
-        residual = output  # (N, n_channels, w, h)
-        output = self.residual_blocks(output)  # (N, n_channels, w, h)
-        output = self.conv_block2(output)  # (N, n_channels, w, h)
-        output = output + residual  # (N, n_channels, w, h)
-        output = self.subpixel_convolutional_blocks(output)  # (N, n_channels, w * scaling factor, h * scaling factor)
-        sr_imgs = self.conv_block3(output)  # (N, 3, w * scaling factor, h * scaling factor)
-
-        return sr_imgs
+def srgan_8x8(pretrained: bool = False, progress: bool = True) -> Generator:
+    r"""GAN model architecture from the
+    `"One weird trick..." <https://arxiv.org/abs/1609.04802>`_ paper.
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        progress (bool): If True, displays a progress bar of the download to stderr
+    """
+    return _gan("srgan_8x8", 8, pretrained, progress)

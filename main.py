@@ -15,11 +15,11 @@ from scripts.losses import LSGANDisFakeLoss, LSGANDisRealLoss, LSGANGenLoss, VGG
 from scripts.metrics import PSNR, worker_init_fn, ssim
 from scripts.training import train_gan
 from scripts.transforms import get_train_lr_transform, get_validation_lr_transform, load_noises, load_kernels
-from settings import DEVICE
+from settings import DEVICE, set_device
 
 if __name__ == "__main__":
     # Required arguments in the JSON file.
-    REQ_ARGUMENTS = ["scale", "paths", "generator", "discriminator", "loaders", "loss", "logging"]
+    REQ_ARGUMENTS = ["scale", "paths", "generator", "discriminator", "loaders", "loss", "logging", "device"]
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
@@ -46,6 +46,9 @@ if __name__ == "__main__":
     # If any required argument is missing, raise error.
     if missing_req:
         raise ValueError(f"Some required arguments were not passed: {missing_req}")
+
+    device = data["device"]
+    set_device(device)
 
     # Assign required arguments.
     scale = data["scale"]
