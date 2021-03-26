@@ -1,5 +1,5 @@
 import os
-from random import choice
+from random import sample, choice
 from typing import List
 
 import PIL
@@ -44,8 +44,9 @@ def load_kernels(kernels_path: str, scale: int) -> None:
         mat = sio.loadmat(os.path.join(kernels_path, filename))["Kernel"]
         mat = torch.from_numpy(mat)
         mat.requires_grad = False
+        # mat = torch.stack([mat, mat, mat])
         mat = torch.unsqueeze(mat, dim=0)
-        mat = torch.unsqueeze(mat, dim=0)
+        # mat = torch.unsqueeze(mat, dim=0)
         mat = mat.type(torch.FloatTensor)
         kernels.append(mat)
 
@@ -73,27 +74,47 @@ def load_noises(noises_path: str) -> None:
     train_noises, valid_noises = torch.utils.data.random_split(
         noises_ds, [NOISES_TRAIN_SIZE, len(noises_ds) - NOISES_TRAIN_SIZE]
     )
+
     train_noises = [noise[0] for noise in train_noises]
     valid_noises = [noise[0] for noise in valid_noises]
 
+    for train_noise in train_noises:
+        train_noise.requires_grad = False
+    for valid_noise in valid_noises:
+        valid_noise.requires_grad = False
+
 
 def inject_noise(images: torch.tensor, noises_list: List[torch.tensor], crop_transform) -> torch.tensor:
-    noise = choice(noises_list)
-    noise = crop_transform(noise)
+    mini_batch_size = images.shape[0]
+    noises = sample(noises_list, mini_batch_size)
+    noises = torch.stack(noises)
+    noise = crop_transform(noises)
     images += noise
     images = torch.clamp(images, -1, 1)
     return images
 
 
+def apply_single_kernel(image: torch.tensor, kernel: torch.tensor) -> torch.tensor:
+    # apply kernel to every channel individually
+    res = [F.conv2d(image[:, i:i + 1, :, :], kernel, stride=SCALE) for i in range(image.shape[1])]
+    return torch.cat(res, dim=1)[0]
+
+
 def apply_kernel(images: torch.tensor, kernels_list: List[torch.tensor]):
-    kernel = choice(kernels_list)
-    padding = (kernel.shape[-1] - 1) // 2
+    # kernels has size [n, 3, h, w]
+    kernels = sample(kernels_list, images.shape[0])
+    kernels = torch.stack(kernels)
+
+    # calculate padding
+    padding = (kernels.shape[-1] - 1) // 2
+
+    # apply padding to mini batch
     images = F.pad(images, [padding] * 4, mode="reflect")
-    downscaled = torch.cat([
-        F.conv2d(images[:, i:i + 1, :, :], kernel, stride=SCALE)
-        for i in range(images.shape[1])],
-        dim=1
-    )
+
+    # apply ind-th kernel to ind-th image individually
+    results = [apply_single_kernel(images[ind:ind + 1], kernels[ind:ind + 1]) for ind in range(images.shape[0])]
+    # make tensor out of list of tensor images
+    downscaled = torch.stack(results)
 
     return downscaled
 

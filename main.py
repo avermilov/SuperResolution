@@ -121,7 +121,6 @@ if __name__ == "__main__":
     metrics_names = logging_dict["metrics"]
 
     # Load noises and kernels
-    # todo: use 4x kernels
     load_noises(noises_path)
     load_kernels(kernels_path, scale)
 
