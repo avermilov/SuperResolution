@@ -43,6 +43,11 @@ def train_gan(scale: int,
     if best_metric == "none":
         best_metric = -10 ** 9
 
+    best_metric_split = best_metric.split()
+    every_n = None
+    if len(best_metric_split) > 1:
+        every_n = int(best_metric_split[1])
+
     use_stepper = stepper is not None
     if use_stepper:
         discriminator_loss = 1
@@ -166,7 +171,11 @@ def train_gan(scale: int,
                 "dis_optimizer": dis_optimizer.state_dict(),
                 "best_metric": best_metric
             }
-            if save_every or epoch == epochs - 1:
+            if every_n is not None:
+                if (epoch - start_epoch) % every_n == every_n - 1:
+                    torch.save(checkpoint_dict,
+                               CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
+            elif save_every or epoch == epochs - 1:
                 torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
             elif metric[0] > best_metric:
                 best_metric = metric[0]
