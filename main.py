@@ -72,12 +72,6 @@ if __name__ == "__main__":
     inference_source_path = paths_dict["inference_source_path"]
     if inference_source_path == "none":
         inference_source_path = None
-    inference_results_path = paths_dict["inference_results_path"]
-    if inference_results_path == "none":
-        inference_results_path = None
-    if inference_results_path is None and inference_source_path is not None \
-            or inference_results_path is not None and inference_source_path is None:
-        raise ValueError("Must pass both inference source and result paths or none.")
 
     generator_dict = data["generator"]
     generator_type = generator_dict["type"]
@@ -175,7 +169,7 @@ if __name__ == "__main__":
                                                              num_features=num_features,
                                                              num_deep_layers=num_deep_layers)
     elif discriminator_type == "ESRDis":
-        discriminator = esrgan_discriminator.Discriminator(num_channels=6).to(DEVICE)
+        discriminator = esrgan_discriminator.Discriminator(num_channels=6, hr_crop=train_crop).to(DEVICE)
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=dis_lr[0], betas=(0.5, 0.999))
 
     # Use specified generator

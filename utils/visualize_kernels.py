@@ -14,9 +14,15 @@ results_path = args.res_path
 kernel_names = []
 kernels = []
 for filename in os.listdir(kernels_path):
-    mat = sio.loadmat(os.path.join(kernels_path, filename))["Kernel"]
-    kernel_names.append(filename[:filename.rfind(".")] + ".png")
-    kernels.append(mat)
+    try:
+        # if filename.startswith("hr2_0086"):
+        #     print()
+        mat = sio.loadmat(os.path.join(kernels_path, filename))
+        mat = mat["Kernel"]
+        kernel_names.append(filename[:filename.rfind(".")] + ".png")
+        kernels.append(mat)
+    except Exception:
+        print(filename, end=" ")
 
 for name, kernel in zip(kernel_names, kernels):
     plt.imsave(results_path + name, kernel)
