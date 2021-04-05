@@ -15,8 +15,6 @@ kernel_names = []
 kernels = []
 for filename in os.listdir(kernels_path):
     try:
-        # if filename.startswith("hr2_0086"):
-        #     print()
         mat = sio.loadmat(os.path.join(kernels_path, filename))
         mat = mat["Kernel"]
         kernel_names.append(filename[:filename.rfind(".")] + ".png")

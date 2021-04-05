@@ -28,7 +28,7 @@ img = load_images_from_folder(img_path)
 height, width, _ = img[0].shape
 
 fourcc = cv2.VideoWriter_fourcc(*'XVID')
-video = cv2.VideoWriter(res_path + save_prefix + '.avi', fourcc, 2.0, (width, height))
+video = cv2.VideoWriter(res_path + save_prefix + '.avi', fourcc, 24.0, (width, height))
 
 for image in img:
     video.write(image)

@@ -40,13 +40,16 @@ def train_gan(scale: int,
     dis_fake_criterion, dis_real_criterion = dis_criterions
 
     save_every = best_metric == "every"
+    every_n = None
     if best_metric == "none":
         best_metric = -10 ** 9
+    elif isinstance(best_metric, str):
+        best_metric_split = best_metric.split()
 
-    best_metric_split = best_metric.split()
-    every_n = None
-    if len(best_metric_split) > 1:
-        every_n = int(best_metric_split[1])
+        if len(best_metric_split) > 1:
+            every_n = int(best_metric_split[1])
+    else:
+        best_metric = best_metric
 
     use_stepper = stepper is not None
     if use_stepper:
