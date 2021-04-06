@@ -107,6 +107,7 @@ if __name__ == "__main__":
         stepper = []
 
     logging_dict = data["logging"]
+    log_name = logging_dict["log_name"]
     max_images = logging_dict["max_images"]
     save_prefix = logging_dict["save_prefix"]
     best_metric = logging_dict["best_metric"]
@@ -237,7 +238,7 @@ if __name__ == "__main__":
                                                         transform=inference_dataset_transform)
         inference_loader = DataLoader(inference_ds, batch_size=inference_batch_size, shuffle=False)
 
-    sw = SummaryWriter()
+    sw = SummaryWriter(log_name)
 
     # If resume was requested, load all parameters from passed checkpoint file.
     if args.resume:
