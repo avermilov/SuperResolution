@@ -127,14 +127,27 @@ if __name__ == "__main__":
     gen_lr = None
     if isinstance(generator_lr, dict):
         gen_lr = []
-        total_count = 0
-        for lr, count in generator_lr.items():
-            gen_lr += [float(lr)] * count
-            total_count += count
-        if total_count != epochs:
-            raise ValueError("Epochs and generator scheduler size must be equal.")
+        if generator_dict["exponential"]:
+            start = generator_lr["start_lr"]
+            base = generator_lr["base"]
+            k = generator_lr["k"]
+            for i in range(epochs):
+                gen_lr.append(start * base ** (i * k))
+        else:
+            total_count = 0
+            for lr, count in generator_lr.items():
+                gen_lr += [float(lr)] * count
+                total_count += count
+            if total_count != epochs:
+                raise ValueError("Epochs and generator scheduler size must be equal.")
     elif isinstance(generator_lr, float):
         gen_lr = [generator_lr] * epochs
+    elif isinstance(generator_lr, list):
+        gen_lr = []
+        base = generator_lr[1]
+        k = generator_lr[2]
+        for i in range(epochs):
+            gen_lr.append()
 
     # Convert discriminator lr to proper list if dict or float was passed
     dis_lr = None
