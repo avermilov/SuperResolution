@@ -78,6 +78,7 @@ def train_gan(scale: int,
         running_dis_total_loss = 0
         running_super_loss = 0
         running_gen_total_loss = 0
+        running_stepper_activation = 0
 
         pbar = tqdm(total=len(train_loader.dataset))
         for i, hr_images in enumerate(train_loader):
@@ -120,6 +121,7 @@ def train_gan(scale: int,
 
             if not stepper_active or not use_stepper:
                 discriminator.requires_grad(True)
+                running_stepper_activation += 1
 
             concat_outputs = concat_outputs.detach()
 
@@ -147,6 +149,9 @@ def train_gan(scale: int,
 
         if summary_writer:
             learning_rate = next(iter(gen_optimizer.param_groups))["lr"]
+            if use_stepper:
+                summary_writer.add_scalar(STEPPER_ACTIVATION_NAME, running_stepper_activation / total_minibatches,
+                                          global_step=epoch)
             summary_writer.add_scalar(LEARNING_RATE_NAME, learning_rate,
                                       global_step=epoch)
             summary_writer.add_scalar(GENERATOR_LOSS_NAME, running_gen_loss / total_minibatches,
