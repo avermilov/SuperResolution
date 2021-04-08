@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 
 
-class Discriminator(nn.Module):
+class ESRGANDis(nn.Module):
     r"""The main architecture of the discriminator. Similar to VGG structure."""
 
     def __init__(self, num_channels: int = 3, hr_crop: int = 64):
-        super(Discriminator, self).__init__()
+        super(ESRGANDis, self).__init__()
         self.features = nn.Sequential(
             nn.Conv2d(num_channels, 64, kernel_size=3, stride=1, padding=1),  # input is (3) x 128 x 128
             nn.LeakyReLU(negative_slope=0.2, inplace=True),
@@ -70,11 +70,3 @@ class Discriminator(nn.Module):
             self.eval()
             for param in self.parameters():
                 param.requires_grad = False
-
-
-def discriminator() -> Discriminator:
-    r"""GAN model architecture from the
-    `"One weird trick..." <https://arxiv.org/abs/1809.00219>`_ paper.
-    """
-    model = Discriminator()
-    return model

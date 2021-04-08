@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
 from models.discriminators import conv_discriminator, esrgan_discriminator
-from models.generators import rdn, newer_esrgan_generator
+from models.generators import rdn, newer_esrgan_generator, blur_rdn
 from scripts.losses import LSGANDisFakeLoss, LSGANDisRealLoss, LSGANGenLoss, VGGPerceptual
 from scripts.metrics import PSNR, worker_init_fn, ssim
 from scripts.training import train_gan
@@ -23,7 +23,7 @@ if __name__ == "__main__":
 
     # Command line parser
     parser = argparse.ArgumentParser(description="Train a Super Resolution GAN.")
-    parser.add_argument("--json", type=str, default=None,
+    parser.add_argument("json", type=str, default=None,
                         help="JSON file with training arguments as parser.")
     parser.add_argument("--resume", type=str, default=None,
                         help="Checkpoint containing info for resuming training.")
@@ -74,11 +74,11 @@ if __name__ == "__main__":
         inference_source_path = None
 
     generator_dict = data["generator"]
-    generator_type = generator_dict["type"]
+    generator_type = generator_dict["type"].lower()
     generator_lr = generator_dict["learning_rate"]
 
     discriminator_dict = data["discriminator"]
-    discriminator_type = discriminator_dict["type"]
+    discriminator_type = discriminator_dict["type"].lower()
     discriminator_lr = discriminator_dict["learning_rate"]
 
     loaders_dict = data["loaders"]
@@ -94,17 +94,17 @@ if __name__ == "__main__":
         raise ValueError("Must pass inference_batch_size if inference paths are specified.")
 
     loss_dict = data["loss"]
-    loss_type = loss_dict["type"]
+    loss_type = loss_dict["type"].lower()
     supervised_coeff = loss_dict["supervised_coeff"]
     generator_coeff = loss_dict["generator_coeff"]
-    if loss_type == "VGGPerceptual":
+    if loss_type == "perceptual":
         if "l1_coeff" not in loss_dict or "vgg_coeff" not in loss_dict:
             raise ValueError("VGGPerceptual loss must specify L1 and VGG coefficients.")
         l1_coeff = loss_dict["l1_coeff"]
         vgg_coeff = loss_dict["vgg_coeff"]
     stepper = loss_dict["stepper"]
     if stepper == "none":
-        stepper = []
+        stepper = None
 
     logging_dict = data["logging"]
     log_name = logging_dict["log_name"]
@@ -151,35 +151,33 @@ if __name__ == "__main__":
 
     # Use specified supervised_criterion
     supervised_criterion = None
-    if loss_type == "VGGPerceptual":
+    if loss_type == "perceptual":
         supervised_criterion = VGGPerceptual(l1_coeff=l1_coeff, vgg_coeff=vgg_coeff)
-    elif loss_type == "L1":
+    elif loss_type == "l1":
         supervised_criterion = nn.L1Loss()
-    elif loss_type == "VGG":
+    elif loss_type == "vgg":
         supervised_criterion = VGGPerceptual(l1_coeff=0, vgg_coeff=1)
 
     # Use specified discriminator
     discriminator = None
-    if discriminator_type == "ConvDis":
-        if "num_discriminator_features" not in discriminator_dict or \
-                "num_deep_layers" not in discriminator_dict:
-            raise ValueError("Not all ConvDiscriminator parameters were given.")
+    if discriminator_type == "convdis":
+        if "num_discriminator_features" not in discriminator_dict:
+            raise ValueError("Not all ConvDis parameters were given.")
         num_features = discriminator_dict["num_discriminator_features"]
-        num_deep_layers = discriminator_dict["num_deep_layers"].to(DEVICE)
-        discriminator = conv_discriminator.ConvDiscriminator(num_channels=6,
-                                                             num_features=num_features,
-                                                             num_deep_layers=num_deep_layers)
-    elif discriminator_type == "ESRDis":
-        discriminator = esrgan_discriminator.Discriminator(num_channels=6, hr_crop=train_crop).to(DEVICE)
+        discriminator = conv_discriminator.ConvDis(num_channels=6, num_features=num_features).to(DEVICE)
+    elif discriminator_type == "esrdis":
+        discriminator = esrgan_discriminator.ESRGANDis(num_channels=6, hr_crop=train_crop).to(DEVICE)
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=dis_lr[0], betas=(0.5, 0.999))
 
     # Use specified generator
     generator = None
-    if generator_type == "RDN":
+    if generator_type == "rdn":
         generator = rdn.RDN(scale, 3, 64, 64, 16, 8).to(DEVICE)
-    elif generator_type == "ESRGen16":
+    elif generator_type == "rdnblur":
+        generator = blur_rdn.BlurRDN(scale, 3, 64, 64, 16, 8).to(DEVICE)
+    elif generator_type == "esrgen16":
         generator = newer_esrgan_generator.esrgan16(scale, pretrained=False).to(DEVICE)
-    elif generator_type == "ESRGen23":
+    elif generator_type == "esrgen23":
         generator = newer_esrgan_generator.esrgan23(scale, pretrained=False).to(DEVICE)
     gen_optimizer = torch.optim.Adam(generator.parameters(), lr=gen_lr[0], betas=(0.5, 0.999))
 
@@ -188,7 +186,7 @@ if __name__ == "__main__":
     metric_dict = {"psnr": PSNR(), "lpips_alex": lpips.LPIPS(net="alex").to(DEVICE),
                    "lpips_vgg": lpips.LPIPS(net="vgg").to(DEVICE), "ssim": ssim}
     for name, metric in metric_dict.items():
-        if name in metrics_names:
+        if name.lower() in metrics_names:
             metrics[name] = metric
 
     gen_criterion = LSGANGenLoss()
