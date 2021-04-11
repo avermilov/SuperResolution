@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
 
-from models.generators import rdn, newer_esrgan_generator
+from models.generators import rdn, newer_esrgan_generator, blur_rdn
 
 
 def cut_image(image: torch.tensor, piece_count: int, padding: int) -> list:
@@ -56,7 +56,7 @@ with open(args.json, "r") as file:
     img_path = data["img_path"]
     res_path = data["res_path"]
     net_path = data["net_path"]
-    net_type = data["net_type"]
+    net_type = data["net_type"].lower()
     save_prefix = data["save_prefix"]
     save_bicubic = data["save_bicubic"]
     DEVICE = data["device"]
@@ -69,10 +69,16 @@ ds_transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
-nets = {"rdn": rdn.RDN(2, 3, 64, 64, 16, 8),
-        "esrgen16": newer_esrgan_generator.esrgan16(scale=2),
-        "esrgen23": newer_esrgan_generator.esrgan23(scale=2)}
-net = nets[net_type.lower()].to(DEVICE)
+net = None
+if net_type == "rdn":
+    net = rdn.RDN(2, 3, 64, 64, 16, 8).to(DEVICE)
+elif net_type == "rdnblur":
+    net = blur_rdn.BlurRDN(2, 3, 64, 64, 16, 8).to(DEVICE)
+elif net_type == "esrgen16":
+    net = newer_esrgan_generator.esrgan16(scale=2).to(DEVICE)
+elif net_type == "esrgen23":
+    net = newer_esrgan_generator.esrgan23(scale=2).to(DEVICE)
+
 gen_dict = torch.load(net_path)["generator"]
 net.load_state_dict(gen_dict)
 net.eval()
@@ -92,7 +98,7 @@ with torch.no_grad():
                     sr_pieces.append(net(piece))
                 sr = glue_image(sr_pieces, cut, padding)
             else:
-                sr = net(sr).to(DEVICE)
+                sr = net(sr)
         sr = (sr + 1) / 2
         sr = torch.clamp(sr, 0, 1)
         torchvision.utils.save_image(sr, res_path + f"{save_prefix}_sr{i:06}.png")
