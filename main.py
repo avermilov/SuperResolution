@@ -70,8 +70,6 @@ if __name__ == "__main__":
     tr_path = paths_dict["train_path"]
     valid_path = paths_dict["validation_path"]
     inference_source_path = paths_dict["inference_source_path"]
-    if inference_source_path == "none":
-        inference_source_path = None
 
     generator_dict = data["generator"]
     generator_type = generator_dict["type"].lower()
@@ -88,9 +86,7 @@ if __name__ == "__main__":
     validation_batch_size = loaders_dict["validation_batch_size"]
     num_workers = loaders_dict["num_workers"]
     inference_batch_size = loaders_dict["inference_batch_size"]
-    if inference_batch_size == "none":
-        inference_batch_size = None
-    if inference_batch_size is None and inference_source_path is not None:
+    if inference_batch_size and not inference_source_path:
         raise ValueError("Must pass inference_batch_size if inference paths are specified.")
 
     loss_dict = data["loss"]
@@ -111,8 +107,6 @@ if __name__ == "__main__":
     max_images = logging_dict["max_images"]
     save_prefix = logging_dict["save_prefix"]
     best_metric = logging_dict["best_metric"]
-    if best_metric == "none":
-        best_metric = None
     metrics_names = logging_dict["metrics"]
 
     # Load noises and kernels
@@ -142,12 +136,6 @@ if __name__ == "__main__":
                 raise ValueError("Epochs and generator scheduler size must be equal.")
     elif isinstance(generator_lr, float):
         gen_lr = [generator_lr] * epochs
-    elif isinstance(generator_lr, list):
-        gen_lr = []
-        base = generator_lr[1]
-        k = generator_lr[2]
-        for i in range(epochs):
-            gen_lr.append()
 
     # Convert discriminator lr to proper list if dict or float was passed
     dis_lr = None
@@ -244,7 +232,7 @@ if __name__ == "__main__":
                                    shuffle=False, num_workers=num_workers)
 
     inference_loader = None
-    if inference_source_path is not None:
+    if inference_source_path:
         inference_ds = torchvision.datasets.ImageFolder(inference_source_path,
                                                         transform=inference_dataset_transform)
         inference_loader = DataLoader(inference_ds, batch_size=inference_batch_size, shuffle=False)
