@@ -36,7 +36,8 @@ def train_gan(scale: int,
               best_metric=-1,
               save_name: str = "",
               inference_loader: DataLoader = None,
-              stepper=None):
+              stepper_threshold: float = None,
+              inference_frequency: int = 1):
     dis_fake_criterion, dis_real_criterion = dis_criterions
 
     save_every = best_metric == "every"
@@ -51,12 +52,8 @@ def train_gan(scale: int,
     else:
         best_metric = best_metric
 
-    use_stepper = stepper is not None
-    if use_stepper:
-        discriminator_loss = 1
-        stepper_off_treshold = stepper["off_threshold"]
-        stepper_on_threshold = stepper["on_threshold"]
-    stepper_active = False
+    use_stepper = stepper_threshold is not None
+    discriminator_loss = float("inf")
 
     total_minibatches = len(train_loader)
     for epoch in range(start_epoch, epochs):
@@ -113,11 +110,9 @@ def train_gan(scale: int,
             running_gen_loss += gen_loss.item()
             running_gen_total_loss += generator_total_loss.item()
 
-            if use_stepper:
-                if not stepper_active and discriminator_loss < stepper_off_treshold:
-                    stepper_active = True
-                elif stepper_active and discriminator_loss > stepper_on_threshold:
-                    stepper_active = False
+            stepper_active = False
+            if use_stepper and discriminator_loss < stepper_threshold:
+                stepper_active = True
 
             if not stepper_active or not use_stepper:
                 discriminator.requires_grad(True)
@@ -189,5 +184,5 @@ def train_gan(scale: int,
                 best_metric = metric[0]
                 torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
 
-            if inference_loader is not None:
+            if inference_loader is not None and (epoch - start_epoch) % inference_frequency == 0:
                 inference(generator, epoch, inference_loader, summary_writer)

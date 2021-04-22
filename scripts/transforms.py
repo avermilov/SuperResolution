@@ -1,5 +1,5 @@
 import os
-from random import sample, choice
+from random import sample
 from typing import List
 
 import PIL

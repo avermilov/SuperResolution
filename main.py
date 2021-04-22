@@ -98,11 +98,10 @@ if __name__ == "__main__":
             raise ValueError("VGGPerceptual loss must specify L1 and VGG coefficients.")
         l1_coeff = loss_dict["l1_coeff"]
         vgg_coeff = loss_dict["vgg_coeff"]
-    stepper = loss_dict["stepper"]
-    if stepper == "none":
-        stepper = None
+    stepper_threshold = loss_dict["stepper_threshold"]
 
     logging_dict = data["logging"]
+    inference_frequency = logging_dict["inference_frequency"]
     log_name = logging_dict["log_name"]
     max_images = logging_dict["max_images"]
     save_prefix = logging_dict["save_prefix"]
@@ -272,4 +271,5 @@ if __name__ == "__main__":
               best_metric=best_metric,
               save_name=save_prefix,
               inference_loader=inference_loader,
-              stepper=stepper)
+              stepper_threshold=stepper_threshold,
+              inference_frequency=inference_frequency)
