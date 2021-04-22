@@ -1,0 +1,54 @@
+{
+  "scale": 2,
+  "epochs": 10,
+  "paths": {
+    "train_path": "Datasets/DIV2K/Train/",
+    "validation_path": "Datasets/DIV2K/Valid/",
+    "kernels_path": "kernels_all/kernels_x2/",
+    "noises_path": "noises/noises_strength02/",
+    "inference_source_path": "predict_images/predict_series03/"
+  },
+  "generator": {
+    "type": "rdnblur",
+    "learning_rate": {
+      "start_lr": 3e-4,
+      "base": 0.99,
+      "k": 0.5
+    },
+    "exponential": true
+  },
+  "discriminator": {
+    "type": "esrdis",
+    "learning_rate": 9e-5
+  },
+  "loaders": {
+    "train_crop": 64,
+    "train_batch_size": 16,
+    "validation_crop": 256,
+    "validation_batch_size": 8,
+    "num_workers": 10,
+    "inference_batch_size": 1
+  },
+  "loss": {
+    "type": "perceptual",
+    "supervised_coeff": 1,
+    "vgg_coeff": 1,
+    "l1_coeff": 1,
+    "generator_coeff": 0.01,
+    "stepper_threshold": 0.3
+  },
+  "logging": {
+    "log_name": "runs/test",
+    "max_images": 30,
+    "inference_frequency": 2,
+    "save_prefix": "test_stuff",
+    "best_metric": 25.6,
+    "metrics": [
+      "psnr",
+      "lpips_alex",
+      "lpips_vgg",
+      "ssim"
+    ]
+  },
+  "device": "cuda:0"
+}

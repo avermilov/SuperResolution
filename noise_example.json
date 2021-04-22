@@ -1,0 +1,8 @@
+{
+  "from_path": "../Datasets/Indiana/Valid/",
+  "to_path": "/home/artermiloff/SuperResolutionProject/SuperResolution/Datasets/Indiana/ValidDenoise/",
+  "noise_level": 4,
+  "window_size": 7,
+  "kernel_size": 0,
+  "type": "denoise"
+}
