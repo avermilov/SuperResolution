@@ -115,13 +115,7 @@ def train_gan(scale: int,
                 running_gen_loss += gen_loss.item()
                 running_gen_total_loss += generator_total_loss.item()
 
-                # stepper_active = False
-                # if use_stepper and discriminator_loss < stepper_threshold:
-                #     stepper_active = True
-
-                # if not stepper_active or not use_stepper:
                 discriminator.requires_grad(True)
-                # running_stepper_activation += 1
 
                 concat_outputs = concat_outputs.detach()
 
@@ -146,11 +140,6 @@ def train_gan(scale: int,
                 running_gen_loss += gen_loss.item()
                 running_gen_total_loss += generator_total_loss.item()
 
-                # stepper_active = False
-                # if use_stepper and discriminator_loss < stepper_threshold:
-                #     stepper_active = True
-
-                # if not stepper_active or not use_stepper:
                 discriminator.requires_grad(True)
 
                 sr_images = sr_images.detach()
@@ -162,7 +151,7 @@ def train_gan(scale: int,
                 dis_real_loss = dis_real_criterion(dis_hr_score)
                 discriminator_loss = dis_fake_loss + dis_real_loss
 
-                # Update discriminator loss count.
+            # Update discriminator loss count.
             running_dis_fake_loss += dis_fake_loss.item()
             running_dis_real_loss += dis_real_loss.item()
             running_dis_total_loss += discriminator_loss.item()
@@ -174,8 +163,6 @@ def train_gan(scale: int,
                 discriminator_loss.backward()
                 dis_optimizer.step()
                 running_stepper_activation += 1
-
-            print(f"batch {i:03}: {discriminator_loss < stepper_threshold}, disloss: {discriminator_loss}")
 
             pbar.update(hr_images.shape[0])
         pbar.close()
