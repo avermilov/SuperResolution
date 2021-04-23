@@ -1,5 +1,6 @@
 from typing import List
 
+import lpips
 import torch.nn.functional as F
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -54,7 +55,9 @@ def train_gan(scale: int,
         best_metric = best_metric
 
     use_stepper = stepper_threshold is not None
-    discriminator_loss = float("inf")
+    best_metric_name = list(metrics.keys())[0]
+    best_metric_type = list(metrics.values())[0]
+    best_is_lpips = isinstance(best_metric_type, lpips.LPIPS)
 
     total_minibatches = len(train_loader)
     for epoch in range(start_epoch, epochs):
@@ -112,13 +115,13 @@ def train_gan(scale: int,
                 running_gen_loss += gen_loss.item()
                 running_gen_total_loss += generator_total_loss.item()
 
-                stepper_active = False
-                if use_stepper and discriminator_loss < stepper_threshold:
-                    stepper_active = True
+                # stepper_active = False
+                # if use_stepper and discriminator_loss < stepper_threshold:
+                #     stepper_active = True
 
-                if not stepper_active or not use_stepper:
-                    discriminator.requires_grad(True)
-                    running_stepper_activation += 1
+                # if not stepper_active or not use_stepper:
+                discriminator.requires_grad(True)
+                # running_stepper_activation += 1
 
                 concat_outputs = concat_outputs.detach()
 
@@ -143,13 +146,12 @@ def train_gan(scale: int,
                 running_gen_loss += gen_loss.item()
                 running_gen_total_loss += generator_total_loss.item()
 
-                stepper_active = False
-                if use_stepper and discriminator_loss < stepper_threshold:
-                    stepper_active = True
+                # stepper_active = False
+                # if use_stepper and discriminator_loss < stepper_threshold:
+                #     stepper_active = True
 
-                if not stepper_active or not use_stepper:
-                    discriminator.requires_grad(True)
-                    running_stepper_activation += 1
+                # if not stepper_active or not use_stepper:
+                discriminator.requires_grad(True)
 
                 sr_images = sr_images.detach()
 
@@ -168,9 +170,12 @@ def train_gan(scale: int,
             generator_total_loss.backward()
             gen_optimizer.step()
 
-            if not stepper_active or not use_stepper:
+            if not use_stepper or discriminator_loss >= stepper_threshold:
                 discriminator_loss.backward()
                 dis_optimizer.step()
+                running_stepper_activation += 1
+
+            print(f"batch {i:03}: {discriminator_loss < stepper_threshold}, disloss: {discriminator_loss}")
 
             pbar.update(hr_images.shape[0])
         pbar.close()
@@ -210,12 +215,13 @@ def train_gan(scale: int,
             if every_n is not None:
                 if (epoch - start_epoch) % every_n == every_n - 1:
                     torch.save(checkpoint_dict,
-                               CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
+                               CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
             elif save_every or epoch == epochs - 1:
-                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
-            elif metric[0] > best_metric:
+                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
+            # todo: fix saving for lpips
+            elif metric[0] > best_metric and not best_is_lpips or metric[0] < best_metric and best_is_lpips:
                 best_metric = metric[0]
-                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_Metric{metric[0]:.5}.pth")
+                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
 
             if inference_loader is not None and (epoch - start_epoch) % inference_frequency == 0:
                 inference(generator, epoch, inference_loader, summary_writer)

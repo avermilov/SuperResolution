@@ -186,9 +186,11 @@ if __name__ == "__main__":
     metrics = dict()
     metric_dict = {"psnr": PSNR(), "lpips_alex": lpips.LPIPS(net="alex").to(DEVICE),
                    "lpips_vgg": lpips.LPIPS(net="vgg").to(DEVICE), "ssim": ssim}
-    for name, metric in metric_dict.items():
-        if name.lower() in metrics_names:
-            metrics[name] = metric
+    # for name, metric in metric_dict.items():
+    #     if name.lower() in metrics_names:
+    #         metrics[name] = metric
+    for metric_name in metrics_names:
+        metrics[metric_name] = metric_dict[metric_name]
 
     gen_criterion = LSGANGenLoss()
     dis_fake_criterion = LSGANDisFakeLoss()
