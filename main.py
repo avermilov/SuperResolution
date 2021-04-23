@@ -77,6 +77,7 @@ if __name__ == "__main__":
     discriminator_dict = data["discriminator"]
     discriminator_type = discriminator_dict["type"].lower()
     discriminator_lr = discriminator_dict["learning_rate"]
+    conditional_gan = discriminator_dict["conditional"]
 
     loaders_dict = data["loaders"]
     train_crop = loaders_dict["train_crop"]
@@ -159,13 +160,14 @@ if __name__ == "__main__":
 
     # Use specified discriminator
     discriminator = None
+    num_channels = 6 if conditional_gan else 3
     if discriminator_type == "convdis":
         if "num_discriminator_features" not in discriminator_dict:
             raise ValueError("Not all ConvDis parameters were given.")
         num_features = discriminator_dict["num_discriminator_features"]
-        discriminator = conv_discriminator.ConvDis(num_channels=6, num_features=num_features).to(DEVICE)
+        discriminator = conv_discriminator.ConvDis(num_channels=num_channels, num_features=num_features).to(DEVICE)
     elif discriminator_type == "esrdis":
-        discriminator = esrgan_discriminator.ESRGANDis(num_channels=6, hr_crop=train_crop).to(DEVICE)
+        discriminator = esrgan_discriminator.ESRGANDis(num_channels=num_channels, hr_crop=train_crop).to(DEVICE)
     dis_optimizer = torch.optim.Adam(discriminator.parameters(), lr=dis_lr[0], betas=(0.5, 0.999))
 
     # Use specified generator
@@ -271,4 +273,5 @@ if __name__ == "__main__":
               save_name=save_prefix,
               inference_loader=inference_loader,
               stepper_threshold=stepper_threshold,
-              inference_frequency=inference_frequency)
+              inference_frequency=inference_frequency,
+              conditional_gan=conditional_gan)

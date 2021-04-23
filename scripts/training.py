@@ -37,7 +37,8 @@ def train_gan(scale: int,
               save_name: str = "",
               inference_loader: DataLoader = None,
               stepper_threshold: float = None,
-              inference_frequency: int = 1):
+              inference_frequency: int = 1,
+              conditional_gan: bool = False):
     dis_fake_criterion, dis_real_criterion = dis_criterions
 
     save_every = best_metric == "every"
@@ -91,43 +92,75 @@ def train_gan(scale: int,
             # Get model output
             sr_images = generator(lr_images)
 
-            # Get concatenated images for conditional GAN
-            scaled_lr_images = F.interpolate(lr_images, scale_factor=scale, mode="bicubic", align_corners=True)
-            concat_outputs = torch.cat((sr_images, scaled_lr_images), 1).to(DEVICE)
-            concat_hr = torch.cat((hr_images, scaled_lr_images), 1).to(DEVICE)
+            if conditional_gan:
+                # Get concatenated images for conditional GAN
+                scaled_lr_images = F.interpolate(lr_images, scale_factor=scale, mode="bicubic", align_corners=True)
+                concat_outputs = torch.cat((sr_images, scaled_lr_images), 1).to(DEVICE)
+                concat_hr = torch.cat((hr_images, scaled_lr_images), 1).to(DEVICE)
 
-            discriminator.requires_grad(False)
+                discriminator.requires_grad(False)
 
-            # Calculate supervised loss and total generator loss.
-            supervised_loss = supervised_coeff * supervised_criterion(sr_images, hr_images)
-            dis_out = discriminator(concat_outputs)
-            dis_hr = discriminator(concat_hr)
-            gen_loss = gan_loss_coeff * gen_criterion(dis_out, dis_hr)
-            generator_total_loss = supervised_loss + gen_loss
+                # Calculate supervised loss and total generator loss.
+                supervised_loss = supervised_coeff * supervised_criterion(sr_images, hr_images)
+                dis_out = discriminator(concat_outputs)
+                dis_hr = discriminator(concat_hr)
+                gen_loss = gan_loss_coeff * gen_criterion(dis_out, dis_hr)
+                generator_total_loss = supervised_loss + gen_loss
 
-            # Update cumulative losses counts.
-            running_super_loss += supervised_loss.item()
-            running_gen_loss += gen_loss.item()
-            running_gen_total_loss += generator_total_loss.item()
+                # Update cumulative losses counts.
+                running_super_loss += supervised_loss.item()
+                running_gen_loss += gen_loss.item()
+                running_gen_total_loss += generator_total_loss.item()
 
-            stepper_active = False
-            if use_stepper and discriminator_loss < stepper_threshold:
-                stepper_active = True
+                stepper_active = False
+                if use_stepper and discriminator_loss < stepper_threshold:
+                    stepper_active = True
 
-            if not stepper_active or not use_stepper:
-                discriminator.requires_grad(True)
-                running_stepper_activation += 1
+                if not stepper_active or not use_stepper:
+                    discriminator.requires_grad(True)
+                    running_stepper_activation += 1
 
-            concat_outputs = concat_outputs.detach()
+                concat_outputs = concat_outputs.detach()
 
-            # Calculate discriminator loss.
-            dis_outputs_score = discriminator(concat_outputs)
-            dis_hr_score = discriminator(concat_hr)
-            dis_fake_loss = dis_fake_criterion(dis_outputs_score)
-            dis_real_loss = dis_real_criterion(dis_hr_score)
-            discriminator_loss = dis_fake_loss + dis_real_loss
+                # Calculate discriminator loss.
+                dis_outputs_score = discriminator(concat_outputs)
+                dis_hr_score = discriminator(concat_hr)
+                dis_fake_loss = dis_fake_criterion(dis_outputs_score)
+                dis_real_loss = dis_real_criterion(dis_hr_score)
+                discriminator_loss = dis_fake_loss + dis_real_loss
+            else:
+                discriminator.requires_grad(False)
 
-            # Update discriminator loss count.
+                # Calculate supervised loss and total generator loss.
+                supervised_loss = supervised_coeff * supervised_criterion(sr_images, hr_images)
+                dis_out = discriminator(sr_images)
+                dis_hr = discriminator(hr_images)
+                gen_loss = gan_loss_coeff * gen_criterion(dis_out, dis_hr)
+                generator_total_loss = supervised_loss + gen_loss
+
+                # Update cumulative losses counts.
+                running_super_loss += supervised_loss.item()
+                running_gen_loss += gen_loss.item()
+                running_gen_total_loss += generator_total_loss.item()
+
+                stepper_active = False
+                if use_stepper and discriminator_loss < stepper_threshold:
+                    stepper_active = True
+
+                if not stepper_active or not use_stepper:
+                    discriminator.requires_grad(True)
+                    running_stepper_activation += 1
+
+                sr_images = sr_images.detach()
+
+                # Calculate discriminator loss.
+                dis_outputs_score = discriminator(sr_images)
+                dis_hr_score = discriminator(hr_images)
+                dis_fake_loss = dis_fake_criterion(dis_outputs_score)
+                dis_real_loss = dis_real_criterion(dis_hr_score)
+                discriminator_loss = dis_fake_loss + dis_real_loss
+
+                # Update discriminator loss count.
             running_dis_fake_loss += dis_fake_loss.item()
             running_dis_real_loss += dis_real_loss.item()
             running_dis_total_loss += discriminator_loss.item()
