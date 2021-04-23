@@ -42,6 +42,7 @@ if __name__ == "__main__":
         scale = data["scale"]
         cut = data["cut"]
         padding = data["padding"]
+        compression_level = data["compression_level"]
 
     generator = None
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -64,12 +65,12 @@ if __name__ == "__main__":
 
     out = vio.FFmpegWriter(save_name + ".mp4", outputdict={
         '-vcodec': 'libx264',
-        '-crf': '0',
+        '-crf': str(compression_level),
         '-preset': 'veryslow'
     })
     out_bic = vio.FFmpegWriter(save_name + "bic.mp4", outputdict={
         '-vcodec': 'libx264',
-        '-crf': '0',
+        '-crf': str(compression_level),
         '-preset': 'veryslow'
     })
 

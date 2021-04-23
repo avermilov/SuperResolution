@@ -1,8 +1,7 @@
+import torch
 import argparse
 import json
-
 import lpips
-import torch
 import torchvision
 from torch import nn
 from torch.utils.data import DataLoader
