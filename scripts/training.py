@@ -39,7 +39,9 @@ def train_gan(scale: int,
               inference_loader: DataLoader = None,
               stepper_threshold: float = None,
               inference_frequency: int = 1,
-              conditional_gan: bool = False):
+              conditional_gan: bool = False,
+              save_frequency: int = 0,
+              inference_save_prefix: str = None):
     dis_fake_criterion, dis_real_criterion = dis_criterions
 
     save_every = best_metric == "every"
@@ -204,11 +206,14 @@ def train_gan(scale: int,
                     torch.save(checkpoint_dict,
                                CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
             elif save_every or epoch == epochs - 1:
-                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
-            # todo: fix saving for lpips
+                torch.save(checkpoint_dict,
+                           CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
             elif metric[0] > best_metric and not best_is_lpips or metric[0] < best_metric and best_is_lpips:
                 best_metric = metric[0]
-                torch.save(checkpoint_dict, CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
+                torch.save(checkpoint_dict,
+                           CHECKPOINTS_PATH + f"{save_name}_Epoch{epoch:03}_{best_metric_name}{metric[0]:.5}.pth")
 
-            if inference_loader is not None and (epoch - start_epoch) % inference_frequency == 0:
-                inference(generator, epoch, inference_loader, summary_writer)
+            save_epoch = save_frequency != 0 and (epoch - start_epoch + 1) % save_frequency == 0
+            log_epoch = (epoch - start_epoch + 1) % inference_frequency == 0
+            if inference_loader is not None and (save_epoch or log_epoch):
+                inference(generator, epoch, inference_loader, summary_writer, inference_save_prefix, save_epoch, log_epoch)

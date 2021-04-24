@@ -61,11 +61,7 @@ if __name__ == "__main__":
 
     paths_dict = data["paths"]
     kernels_path = paths_dict["kernels_path"]
-    if kernels_path.lower() == "none":
-        kernels_path = None
     noises_path = paths_dict["noises_path"]
-    if noises_path.lower() == "none":
-        noises_path = None
     tr_path = paths_dict["train_path"]
     valid_path = paths_dict["validation_path"]
     inference_source_path = paths_dict["inference_source_path"]
@@ -105,8 +101,10 @@ if __name__ == "__main__":
     log_name = logging_dict["log_name"]
     max_images = logging_dict["max_images"]
     save_prefix = logging_dict["save_prefix"]
+    inference_save_prefix = logging_dict["inference_save_prefix"]
     best_metric = logging_dict["best_metric"]
     metrics_names = logging_dict["metrics"]
+    save_frequency = logging_dict["save_frequency"]
 
     # Load noises and kernels
     load_noises(noises_path)
@@ -276,4 +274,6 @@ if __name__ == "__main__":
               inference_loader=inference_loader,
               stepper_threshold=stepper_threshold,
               inference_frequency=inference_frequency,
-              conditional_gan=conditional_gan)
+              conditional_gan=conditional_gan,
+              save_frequency=save_frequency,
+              inference_save_prefix=inference_save_prefix)
