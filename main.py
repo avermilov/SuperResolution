@@ -9,7 +9,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 
 from models.discriminators import conv_discriminator, esrgan_discriminator
-from models.generators import rdn, newer_esrgan_generator, blur_rdn
+from models.generators import rdn, newer_esrgan_generator, blur_rdn, sr_cnn
 from scripts.losses import LSGANDisFakeLoss, LSGANDisRealLoss, LSGANGenLoss, VGGPerceptual
 from scripts.metrics import PSNR, worker_init_fn, ssim
 from scripts.training import train_gan
@@ -178,6 +178,8 @@ if __name__ == "__main__":
         generator = newer_esrgan_generator.esrgan16(scale, pretrained=False).to(DEVICE)
     elif generator_type == "esrgen23":
         generator = newer_esrgan_generator.esrgan23(scale, pretrained=False).to(DEVICE)
+    elif generator_type == "srcnn":
+        generator = sr_cnn.SRCNN(scale=scale).to(DEVICE)
     gen_optimizer = torch.optim.Adam(generator.parameters(), lr=gen_lr[0], betas=(0.5, 0.999))
 
     # Use specified metrics for validation
