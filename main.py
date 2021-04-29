@@ -155,6 +155,8 @@ if __name__ == "__main__":
         supervised_criterion = nn.L1Loss()
     elif loss_type == "vgg":
         supervised_criterion = VGGPerceptual(l1_coeff=0, vgg_coeff=1)
+    elif loss_type == "l2":
+        supervised_criterion = nn.MSELoss()
 
     # Use specified discriminator
     discriminator = None
